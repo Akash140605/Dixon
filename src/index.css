@@ -1,0 +1,56 @@
+@import "tailwindcss";
+
+:root {
+  --bg: #f4f8fc;
+  --text: #102033;
+  --input-bg: #ffffff;
+  --input-border: #c7d4e2;
+  --input-border-focus: #0ea5e9;
+  --input-placeholder: #6b7c93;
+  --input-disabled-bg: #edf2f7;
+  --input-disabled-text: #526277;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: Inter, sans-serif;
+  background:
+    radial-gradient(circle at top left, rgba(6, 182, 212, 0.10), transparent 24%),
+    radial-gradient(circle at top right, rgba(59, 130, 246, 0.08), transparent 24%),
+    linear-gradient(180deg, #f8fbff 0%, var(--bg) 100%);
+  color: var(--text);
+}
+
+.field {
+  width: 100%;
+  border-radius: 0;
+  border: 1px solid var(--input-border);
+  background: var(--input-bg);
+  color: var(--text);
+  padding: 0.95rem 1rem;
+  outline: none;
+  font-size: 1rem;
+  font-weight: 500;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+}
+
+.field::placeholder {
+  color: var(--input-placeholder);
+}
+
+.field:focus {
+  border-color: var(--input-border-focus);
+  box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.14);
+  background: #fff;
+}
+
+.field:disabled {
+  opacity: 1;
+  cursor: not-allowed;
+  background: var(--input-disabled-bg);
+  color: var(--input-disabled-text);
+}
