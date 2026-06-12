@@ -48,6 +48,20 @@ const formatRejectBreakdown = (row) => {
   return "";
 };
 
+const formatResponsibilities = (row) => {
+  if (Array.isArray(row.responsibilities) && row.responsibilities.length) {
+    return row.responsibilities
+      .map((item) =>
+        item?.department ? `${item.person} (${item.department})` : item.person || ""
+      )
+      .filter(Boolean)
+      .join(", ");
+  }
+
+  if (row.responsibilitiesText) return String(row.responsibilitiesText);
+  return "";
+};
+
 const getReasonWiseRejects = (row) => {
   const base = REJECT_REASONS.reduce((acc, reason) => {
     acc[reason] = 0;
@@ -57,7 +71,8 @@ const getReasonWiseRejects = (row) => {
   if (Array.isArray(row.rejectBreakdown) && row.rejectBreakdown.length) {
     row.rejectBreakdown.forEach((item) => {
       const matchedReason = REJECT_REASONS.find(
-        (reason) => reason.toLowerCase() === String(item.reason || "").trim().toLowerCase()
+        (reason) =>
+          reason.toLowerCase() === String(item.reason || "").trim().toLowerCase()
       );
       if (matchedReason) {
         base[matchedReason] += Number(item.qty || 0);
@@ -68,7 +83,8 @@ const getReasonWiseRejects = (row) => {
 
   if (row.rejectReason) {
     const matchedReason = REJECT_REASONS.find(
-      (reason) => reason.toLowerCase() === String(row.rejectReason || "").trim().toLowerCase()
+      (reason) =>
+        reason.toLowerCase() === String(row.rejectReason || "").trim().toLowerCase()
     );
     if (matchedReason) {
       base[matchedReason] = Number(row.reject || 0);
@@ -102,11 +118,16 @@ export default function HourlyProductionTable({ rows = [] }) {
       normalizedDate: normalizeDate(row.date),
       normalizedShift: normalizeShift(row.shiftLabel || row.shift),
       rejectBreakdownText: formatRejectBreakdown(row),
+      responsibilitiesTextFormatted: formatResponsibilities(row),
       reasonWiseRejects: getReasonWiseRejects(row),
       target: Number(row.target ?? 0),
       actual: Number(row.actual ?? 0),
       good: Number(row.good ?? 0),
       reject: Number(row.reject ?? 0),
+      lossTime: Number(
+        row.lossTime ?? Math.max(Number(row.target ?? 0) - Number(row.actual ?? 0), 0)
+      ),
+      isNewOperator: Boolean(row.isNewOperator),
     }));
   }, [rows]);
 
@@ -139,6 +160,8 @@ export default function HourlyProductionTable({ rows = [] }) {
       const rejectReason = String(row.rejectReason || "").toLowerCase();
       const rejectBreakdown = String(row.rejectBreakdownText || "").toLowerCase();
       const remarks = String(row.remarks || "").toLowerCase();
+      const responsibilities = String(row.responsibilitiesTextFormatted || "").toLowerCase();
+      const newOperatorStatus = row.isNewOperator ? "yes new operator" : "existing operator";
 
       const matchesSearch =
         !searchText ||
@@ -153,12 +176,15 @@ export default function HourlyProductionTable({ rows = [] }) {
           operator,
           rejectReason,
           rejectBreakdown,
+          responsibilities,
           remarks,
+          newOperatorStatus,
         ].some((value) => value.includes(searchText));
 
       const matchesDate = !filterDate || date.includes(filterDate);
       const matchesHall = !filters.hall || hall === filters.hall.toLowerCase();
-      const matchesMachine = !filters.machine || machine === filters.machine.toLowerCase();
+      const matchesMachine =
+        !filters.machine || machine === filters.machine.toLowerCase();
       const matchesShift = !filters.shift || shift === filters.shift.toLowerCase();
       const matchesRejectReason =
         !filterRejectReason ||
@@ -183,9 +209,10 @@ export default function HourlyProductionTable({ rows = [] }) {
         acc.actual += row.actual;
         acc.good += row.good;
         acc.reject += row.reject;
+        acc.lossTime += row.lossTime;
         return acc;
       },
-      { target: 0, actual: 0, good: 0, reject: 0 }
+      { target: 0, actual: 0, good: 0, reject: 0, lossTime: 0 }
     );
 
     return {
@@ -220,10 +247,12 @@ export default function HourlyProductionTable({ rows = [] }) {
         Part: row.part || "",
         "Operator ID": row.operatorId || "",
         Operator: row.operator || "",
+        "New Operator": row.isNewOperator ? "Yes" : "No",
         Target: row.target ?? 0,
         Actual: row.actual ?? 0,
         Good: row.good ?? 0,
         Reject: row.reject ?? 0,
+        "Loss Time": row.lossTime ?? 0,
       };
 
       REJECT_REASONS.forEach((reason) => {
@@ -231,6 +260,7 @@ export default function HourlyProductionTable({ rows = [] }) {
       });
 
       base["Reject Breakdown"] = row.rejectBreakdownText || "";
+      base["Responsibility Persons"] = row.responsibilitiesTextFormatted || "";
       base.Remarks = row.remarks || "";
 
       return base;
@@ -246,11 +276,14 @@ export default function HourlyProductionTable({ rows = [] }) {
       Part: "",
       "Operator ID": "",
       Operator: "",
+      "New Operator": "",
       Target: totals.target,
       Actual: totals.actual,
       Good: totals.good,
       Reject: totals.reject,
+      "Loss Time": totals.lossTime,
       "Reject Breakdown": `Reject %: ${rejectPercent}%`,
+      "Responsibility Persons": "",
       Remarks: `Rows: ${filteredRows.length}`,
     };
 
@@ -272,12 +305,15 @@ export default function HourlyProductionTable({ rows = [] }) {
       { wch: 22 },
       { wch: 16 },
       { wch: 18 },
+      { wch: 14 },
       { wch: 10 },
       { wch: 10 },
       { wch: 10 },
       { wch: 10 },
+      { wch: 12 },
       ...REJECT_REASONS.map(() => ({ wch: 12 })),
       { wch: 32 },
+      { wch: 34 },
       { wch: 24 },
     ];
 
@@ -308,7 +344,7 @@ export default function HourlyProductionTable({ rows = [] }) {
               Hourly Production Report
             </h2>
             <p className="mt-1 max-w-2xl text-sm text-slate-600">
-              Hall, machine, shift, part, operator aur reason-wise rejection reporting.
+              Hall, machine, shift, part, operator, loss time aur reason-wise rejection reporting.
             </p>
           </div>
 
@@ -337,12 +373,13 @@ export default function HourlyProductionTable({ rows = [] }) {
           </div>
         </div>
 
-        <div className="no-print mb-5 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
+        <div className="no-print mb-5 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
           <SummaryCard label="Target" value={totals.target} tone="slate" />
           <SummaryCard label="Actual" value={totals.actual} tone="blue" />
           <SummaryCard label="Good" value={totals.good} tone="emerald" />
           <SummaryCard label="Reject" value={totals.reject} tone="rose" />
-          <SummaryCard label="Reject %" value={`${rejectPercent}%`} tone="amber" />
+          <SummaryCard label="Loss Time" value={totals.lossTime} tone="amber" />
+          <SummaryCard label="Reject %" value={`${rejectPercent}%`} tone="neutral" />
         </div>
 
         <div className="no-print mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-8">
@@ -384,7 +421,7 @@ export default function HourlyProductionTable({ rows = [] }) {
                 name="search"
                 value={filters.search}
                 onChange={handleFilterChange}
-                placeholder="Machine, part, operator..."
+                placeholder="Machine, part, operator, responsibility..."
                 className="filter-input"
               />
             </FilterInput>
@@ -461,7 +498,7 @@ export default function HourlyProductionTable({ rows = [] }) {
         </div>
 
         <div className="table-scroll-wrap border border-slate-300 bg-white">
-          <table className="printable-table min-w-[2200px] table-fixed text-sm">
+          <table className="printable-table min-w-[2650px] table-fixed text-sm">
             <thead className="print:bg-transparent">
               <tr className="border-b border-slate-400 text-slate-800">
                 <TableHead className="w-[110px]">Date</TableHead>
@@ -472,16 +509,21 @@ export default function HourlyProductionTable({ rows = [] }) {
                 <TableHead className="w-[150px]">Part</TableHead>
                 <TableHead className="w-[100px]">Operator ID</TableHead>
                 <TableHead className="w-[140px]">Operator</TableHead>
+                <TableHead className="w-[110px]">New Operator</TableHead>
                 <TableHead className="w-[80px]">Target</TableHead>
                 <TableHead className="w-[80px]">Actual</TableHead>
                 <TableHead className="w-[80px]">Good</TableHead>
                 <TableHead className="w-[80px]">Reject</TableHead>
+                <TableHead className="w-[90px]">Loss Time</TableHead>
+
                 {REJECT_REASONS.map((reason) => (
                   <TableHead key={reason} className="w-[95px]">
                     {reason}
                   </TableHead>
                 ))}
+
                 <TableHead className="w-[210px]">Reject Breakdown</TableHead>
+                <TableHead className="w-[240px]">Responsibility Persons</TableHead>
                 <TableHead className="w-[180px]">Remarks</TableHead>
               </tr>
             </thead>
@@ -505,6 +547,11 @@ export default function HourlyProductionTable({ rows = [] }) {
                     <TableCell clamp>{row.part || "-"}</TableCell>
                     <TableCell>{row.operatorId || "-"}</TableCell>
                     <TableCell clamp>{row.operator || "-"}</TableCell>
+                    <TableCell>
+                      <span className="inline-flex border border-slate-300 bg-slate-50 px-2 py-1 text-xs font-bold text-slate-700">
+                        {row.isNewOperator ? "Yes" : "No"}
+                      </span>
+                    </TableCell>
                     <TableCell strong>{row.target ?? 0}</TableCell>
                     <TableCell className="font-bold text-slate-900">{row.actual ?? 0}</TableCell>
                     <TableCell className="font-bold text-emerald-700 print:text-slate-900">
@@ -513,12 +560,16 @@ export default function HourlyProductionTable({ rows = [] }) {
                     <TableCell className="font-bold text-rose-700 print:text-slate-900">
                       {row.reject ?? 0}
                     </TableCell>
+                    <TableCell className="font-bold text-amber-700 print:text-slate-900">
+                      {row.lossTime ?? 0}
+                    </TableCell>
 
                     {REJECT_REASONS.map((reason) => (
                       <TableCell key={reason}>{row.reasonWiseRejects?.[reason] ?? 0}</TableCell>
                     ))}
 
                     <TableCell clamp>{row.rejectBreakdownText || "-"}</TableCell>
+                    <TableCell clamp>{row.responsibilitiesTextFormatted || "-"}</TableCell>
                     <TableCell clamp muted>
                       {row.remarks || "-"}
                     </TableCell>
@@ -526,7 +577,7 @@ export default function HourlyProductionTable({ rows = [] }) {
                 ))
               ) : (
                 <tr>
-                  <td colSpan={14 + REJECT_REASONS.length} className="px-4 py-10 text-center">
+                  <td colSpan={17 + REJECT_REASONS.length} className="px-4 py-10 text-center">
                     <div className="border border-dashed border-slate-300 bg-slate-50 px-4 py-8">
                       <p className="text-sm font-semibold text-slate-700">
                         No production entries found
@@ -543,13 +594,17 @@ export default function HourlyProductionTable({ rows = [] }) {
             {filteredRows.length > 0 && (
               <tfoot className="bg-slate-100">
                 <tr className="border-t-2 border-slate-400 text-slate-900">
-                  <td colSpan="8" className="px-4 py-3 text-right font-bold uppercase tracking-wide">
+                  <td
+                    colSpan="9"
+                    className="px-4 py-3 text-right font-bold uppercase tracking-wide"
+                  >
                     Total
                   </td>
                   <td className="px-4 py-3 font-bold">{totals.target}</td>
                   <td className="px-4 py-3 font-bold">{totals.actual}</td>
                   <td className="px-4 py-3 font-bold text-emerald-700">{totals.good}</td>
                   <td className="px-4 py-3 font-bold text-rose-700">{totals.reject}</td>
+                  <td className="px-4 py-3 font-bold text-amber-700">{totals.lossTime}</td>
 
                   {REJECT_REASONS.map((reason) => (
                     <td key={reason} className="px-4 py-3 font-bold">
@@ -560,6 +615,7 @@ export default function HourlyProductionTable({ rows = [] }) {
                   <td className="px-4 py-3 font-semibold text-amber-700">
                     Reject %: {rejectPercent}%
                   </td>
+                  <td className="px-4 py-3 text-slate-700">-</td>
                   <td className="px-4 py-3 text-slate-700">Rows: {filteredRows.length}</td>
                 </tr>
               </tfoot>

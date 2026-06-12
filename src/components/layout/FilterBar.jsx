@@ -2,14 +2,41 @@ import { useMemo } from "react";
 import { halls, machineMap, shifts } from "../../data/formData";
 import { useProduction } from "../../context/ProductionContext";
 
+const getMachineCode = (machine) => {
+  if (typeof machine === "string") return machine;
+  return machine?.code || "";
+};
+
+const getMachineLabel = (machine) => {
+  if (typeof machine === "string") return machine;
+  return machine?.displayName || machine?.name || machine?.code || "";
+};
+
+const getAllMachines = () => {
+  return Object.values(machineMap)
+    .flat()
+    .filter(Boolean);
+};
+
 export default function FilterBar() {
   const { filters, setFilters, resetFilters } = useProduction();
 
   const machineOptions = useMemo(() => {
-    if (!filters.hall) {
-      return Object.values(machineMap).flat();
-    }
-    return machineMap[filters.hall] || [];
+    const rawMachines = filters.hall
+      ? machineMap[filters.hall] || []
+      : getAllMachines();
+
+    const uniqueMachines = [];
+    const seen = new Set();
+
+    rawMachines.forEach((machine) => {
+      const code = getMachineCode(machine);
+      if (!code || seen.has(code)) return;
+      seen.add(code);
+      uniqueMachines.push(machine);
+    });
+
+    return uniqueMachines;
   }, [filters.hall]);
 
   const handleChange = (e) => {
@@ -58,7 +85,7 @@ export default function FilterBar() {
           <input
             type="date"
             name="date"
-            value={filters.date}
+            value={filters.date || ""}
             onChange={handleChange}
             className="w-full border border-slate-300 bg-white px-4 py-3 text-sm text-slate-800 outline-none transition focus:border-slate-500"
           />
@@ -70,7 +97,7 @@ export default function FilterBar() {
           </label>
           <select
             name="hall"
-            value={filters.hall}
+            value={filters.hall || ""}
             onChange={handleChange}
             className="w-full border border-slate-300 bg-white px-4 py-3 text-sm text-slate-800 outline-none transition focus:border-slate-500"
           >
@@ -89,7 +116,7 @@ export default function FilterBar() {
           </label>
           <select
             name="shift"
-            value={filters.shift}
+            value={filters.shift || ""}
             onChange={handleChange}
             className="w-full border border-slate-300 bg-white px-4 py-3 text-sm text-slate-800 outline-none transition focus:border-slate-500"
           >
@@ -108,16 +135,21 @@ export default function FilterBar() {
           </label>
           <select
             name="machine"
-            value={filters.machine}
+            value={filters.machine || ""}
             onChange={handleChange}
             className="w-full border border-slate-300 bg-white px-4 py-3 text-sm text-slate-800 outline-none transition focus:border-slate-500"
           >
             <option value="">All Machines</option>
-            {machineOptions.map((machine, index) => (
-              <option key={`${machine}-${index}`} value={machine}>
-                {machine}
-              </option>
-            ))}
+            {machineOptions.map((machine) => {
+              const code = getMachineCode(machine);
+              const label = getMachineLabel(machine);
+
+              return (
+                <option key={code} value={code}>
+                  {label}
+                </option>
+              );
+            })}
           </select>
         </div>
 
@@ -128,7 +160,7 @@ export default function FilterBar() {
           <input
             type="text"
             name="operator"
-            value={filters.operator}
+            value={filters.operator || ""}
             onChange={handleChange}
             placeholder="Search operator"
             className="w-full border border-slate-300 bg-white px-4 py-3 text-sm text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-slate-500"
