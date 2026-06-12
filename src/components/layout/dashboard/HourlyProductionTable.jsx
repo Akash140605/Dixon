@@ -29,7 +29,7 @@ const normalizeShift = (value) => {
   if (["B", "SHIFT B", "SHIFT 2", "2"].includes(shift)) return "B";
   if (["C", "SHIFT C", "SHIFT 3", "3"].includes(shift)) return "C";
 
-  return shift;
+  return shift.replace("SHIFT ", "");
 };
 
 const normalizeDate = (value) => {
@@ -41,14 +41,30 @@ const normalizeDate = (value) => {
 };
 
 const formatRejectBreakdown = (row) => {
+  if (row.rejectBreakdownText) return String(row.rejectBreakdownText);
+
   if (Array.isArray(row.rejectBreakdown) && row.rejectBreakdown.length) {
     return row.rejectBreakdown.map((item) => `${item.reason}: ${item.qty}`).join(", ");
   }
+
   if (row.rejectReason) return String(row.rejectReason);
   return "";
 };
 
-const formatResponsibilities = (row) => {
+const formatResponsiblePersons = (row) => {
+  if (Array.isArray(row.lossTimeBreakdown) && row.lossTimeBreakdown.length) {
+    return row.lossTimeBreakdown
+      .map((item) =>
+        item?.person
+          ? item?.department
+            ? `${item.person} (${item.department})`
+            : item.person
+          : ""
+      )
+      .filter(Boolean)
+      .join(", ");
+  }
+
   if (Array.isArray(row.responsibilities) && row.responsibilities.length) {
     return row.responsibilities
       .map((item) =>
@@ -59,6 +75,27 @@ const formatResponsibilities = (row) => {
   }
 
   if (row.responsibilitiesText) return String(row.responsibilitiesText);
+  return "";
+};
+
+const formatLossTimeBreakdown = (row) => {
+  if (row.lossTimeBreakdownText) return String(row.lossTimeBreakdownText);
+
+  if (Array.isArray(row.lossTimeBreakdown) && row.lossTimeBreakdown.length) {
+    return row.lossTimeBreakdown
+      .map((item) => {
+        const reason = item?.reason || "Unknown";
+        const qty = Number(item?.qty || 0);
+        const person = item?.person
+          ? item?.department
+            ? ` - ${item.person} (${item.department})`
+            : ` - ${item.person}`
+          : "";
+        return `${reason}: ${qty}${person}`;
+      })
+      .join(", ");
+  }
+
   return "";
 };
 
@@ -109,26 +146,44 @@ const getReasonTotals = (rows) => {
   );
 };
 
+const getMachineDisplay = (row) => {
+  if (typeof row.machine === "string" && row.machine.trim()) return row.machine;
+  if (row.machine?.displayName) return row.machine.displayName;
+  if (row.machineCode && row.machineName) return `${row.machineCode} - ${row.machineName}`;
+  if (row.machineCode) return row.machineCode;
+  return "";
+};
+
 export default function HourlyProductionTable({ rows = [] }) {
   const [filters, setFilters] = useState(initialFilters);
 
   const normalizedRows = useMemo(() => {
-    return rows.map((row) => ({
-      ...row,
-      normalizedDate: normalizeDate(row.date),
-      normalizedShift: normalizeShift(row.shiftLabel || row.shift),
-      rejectBreakdownText: formatRejectBreakdown(row),
-      responsibilitiesTextFormatted: formatResponsibilities(row),
-      reasonWiseRejects: getReasonWiseRejects(row),
-      target: Number(row.target ?? 0),
-      actual: Number(row.actual ?? 0),
-      good: Number(row.good ?? 0),
-      reject: Number(row.reject ?? 0),
-      lossTime: Number(
-        row.lossTime ?? Math.max(Number(row.target ?? 0) - Number(row.actual ?? 0), 0)
-      ),
-      isNewOperator: Boolean(row.isNewOperator),
-    }));
+    return rows.map((row) => {
+      const target = Number(row.target ?? 0);
+      const actual = Number(row.actual ?? 0);
+      const reject = Number(row.reject ?? 0);
+      const good = Number(row.good ?? Math.max(actual - reject, 0));
+      const lossTime = Number(
+        row.lossTime ?? Math.max(target - actual, 0)
+      );
+
+      return {
+        ...row,
+        machineDisplay: getMachineDisplay(row),
+        normalizedDate: normalizeDate(row.date),
+        normalizedShift: normalizeShift(row.shiftLabel || row.shift),
+        rejectBreakdownTextFormatted: formatRejectBreakdown(row),
+        responsiblePersonsTextFormatted: formatResponsiblePersons(row),
+        lossTimeBreakdownTextFormatted: formatLossTimeBreakdown(row),
+        reasonWiseRejects: getReasonWiseRejects(row),
+        target,
+        actual,
+        good,
+        reject,
+        lossTime,
+        isNewOperator: Boolean(row.isNewOperator),
+      };
+    });
   }, [rows]);
 
   const uniqueOptions = useMemo(() => {
@@ -136,7 +191,7 @@ export default function HourlyProductionTable({ rows = [] }) {
 
     return {
       halls: pick((row) => row.hall),
-      machines: pick((row) => row.machine),
+      machines: pick((row) => row.machineDisplay),
       shifts: ["A", "B", "C"].filter((shift) =>
         normalizedRows.some((row) => row.normalizedShift === shift)
       ),
@@ -151,16 +206,20 @@ export default function HourlyProductionTable({ rows = [] }) {
     return normalizedRows.filter((row) => {
       const date = String(row.normalizedDate || row.date || "").toLowerCase();
       const hall = String(row.hall || "").toLowerCase();
-      const machine = String(row.machine || "").toLowerCase();
+      const machine = String(row.machineDisplay || "").toLowerCase();
+      const machineCode = String(row.machineCode || "").toLowerCase();
+      const machineName = String(row.machineName || "").toLowerCase();
       const shift = String(row.normalizedShift || "").toLowerCase();
       const hour = String(row.hour || row.duration || "").toLowerCase();
       const part = String(row.part || "").toLowerCase();
       const operatorId = String(row.operatorId || "").toLowerCase();
       const operator = String(row.operator || "").toLowerCase();
       const rejectReason = String(row.rejectReason || "").toLowerCase();
-      const rejectBreakdown = String(row.rejectBreakdownText || "").toLowerCase();
+      const rejectBreakdown = String(row.rejectBreakdownTextFormatted || "").toLowerCase();
+      const lossTimeBreakdown = String(row.lossTimeBreakdownTextFormatted || "").toLowerCase();
+      const responsiblePersons = String(row.responsiblePersonsTextFormatted || "").toLowerCase();
       const remarks = String(row.remarks || "").toLowerCase();
-      const responsibilities = String(row.responsibilitiesTextFormatted || "").toLowerCase();
+      const createdAt = String(row.createdAt || "").toLowerCase();
       const newOperatorStatus = row.isNewOperator ? "yes new operator" : "existing operator";
 
       const matchesSearch =
@@ -169,6 +228,8 @@ export default function HourlyProductionTable({ rows = [] }) {
           date,
           hall,
           machine,
+          machineCode,
+          machineName,
           shift,
           hour,
           part,
@@ -176,8 +237,10 @@ export default function HourlyProductionTable({ rows = [] }) {
           operator,
           rejectReason,
           rejectBreakdown,
-          responsibilities,
+          lossTimeBreakdown,
+          responsiblePersons,
           remarks,
+          createdAt,
           newOperatorStatus,
         ].some((value) => value.includes(searchText));
 
@@ -241,7 +304,9 @@ export default function HourlyProductionTable({ rows = [] }) {
         "S.No": index + 1,
         Date: row.normalizedDate || row.date || "",
         Hall: row.hall || "",
-        Machine: row.machine || "",
+        "Machine Display": row.machineDisplay || "",
+        "Machine Code": row.machineCode || "",
+        "Machine Name": row.machineName || "",
         Shift: row.normalizedShift || "",
         Hour: row.hour || row.duration || "",
         Part: row.part || "",
@@ -259,9 +324,13 @@ export default function HourlyProductionTable({ rows = [] }) {
         base[reason] = row.reasonWiseRejects?.[reason] ?? 0;
       });
 
-      base["Reject Breakdown"] = row.rejectBreakdownText || "";
-      base["Responsibility Persons"] = row.responsibilitiesTextFormatted || "";
+      base["Reject Breakdown"] = row.rejectBreakdownTextFormatted || "";
+      base["Loss Time Breakdown"] = row.lossTimeBreakdownTextFormatted || "";
+      base["Responsible Persons"] = row.responsiblePersonsTextFormatted || "";
+      base["Reject %"] =
+        row.actual > 0 ? `${((row.reject / row.actual) * 100).toFixed(2)}%` : "0.00%";
       base.Remarks = row.remarks || "";
+      base["Created At"] = row.createdAt || "";
 
       return base;
     });
@@ -270,7 +339,9 @@ export default function HourlyProductionTable({ rows = [] }) {
       "S.No": "",
       Date: "Summary",
       Hall: "",
-      Machine: "",
+      "Machine Display": "",
+      "Machine Code": "",
+      "Machine Name": "",
       Shift: "",
       Hour: "",
       Part: "",
@@ -283,8 +354,11 @@ export default function HourlyProductionTable({ rows = [] }) {
       Reject: totals.reject,
       "Loss Time": totals.lossTime,
       "Reject Breakdown": `Reject %: ${rejectPercent}%`,
-      "Responsibility Persons": "",
+      "Loss Time Breakdown": "",
+      "Responsible Persons": "",
+      "Reject %": `${rejectPercent}%`,
       Remarks: `Rows: ${filteredRows.length}`,
+      "Created At": "",
     };
 
     REJECT_REASONS.forEach((reason) => {
@@ -298,6 +372,8 @@ export default function HourlyProductionTable({ rows = [] }) {
     worksheet["!cols"] = [
       { wch: 8 },
       { wch: 14 },
+      { wch: 14 },
+      { wch: 24 },
       { wch: 14 },
       { wch: 18 },
       { wch: 8 },
@@ -313,8 +389,11 @@ export default function HourlyProductionTable({ rows = [] }) {
       { wch: 12 },
       ...REJECT_REASONS.map(() => ({ wch: 12 })),
       { wch: 32 },
-      { wch: 34 },
+      { wch: 36 },
+      { wch: 28 },
+      { wch: 12 },
       { wch: 24 },
+      { wch: 22 },
     ];
 
     const workbook = XLSX.utils.book_new();
@@ -421,7 +500,7 @@ export default function HourlyProductionTable({ rows = [] }) {
                 name="search"
                 value={filters.search}
                 onChange={handleFilterChange}
-                placeholder="Machine, part, operator, responsibility..."
+                placeholder="Machine, part, operator, loss time..."
                 className="filter-input"
               />
             </FilterInput>
@@ -498,12 +577,14 @@ export default function HourlyProductionTable({ rows = [] }) {
         </div>
 
         <div className="table-scroll-wrap border border-slate-300 bg-white">
-          <table className="printable-table min-w-[2650px] table-fixed text-sm">
+          <table className="printable-table min-w-[3200px] table-fixed text-sm">
             <thead className="print:bg-transparent">
               <tr className="border-b border-slate-400 text-slate-800">
                 <TableHead className="w-[110px]">Date</TableHead>
                 <TableHead className="w-[90px]">Hall</TableHead>
-                <TableHead className="w-[120px]">Machine</TableHead>
+                <TableHead className="w-[160px]">Machine Display</TableHead>
+                <TableHead className="w-[110px]">Machine Code</TableHead>
+                <TableHead className="w-[140px]">Machine Name</TableHead>
                 <TableHead className="w-[70px]">Shift</TableHead>
                 <TableHead className="w-[120px]">Hour</TableHead>
                 <TableHead className="w-[150px]">Part</TableHead>
@@ -523,61 +604,78 @@ export default function HourlyProductionTable({ rows = [] }) {
                 ))}
 
                 <TableHead className="w-[210px]">Reject Breakdown</TableHead>
-                <TableHead className="w-[240px]">Responsibility Persons</TableHead>
+                <TableHead className="w-[260px]">Loss Time Breakdown</TableHead>
+                <TableHead className="w-[220px]">Responsible Persons</TableHead>
+                <TableHead className="w-[100px]">Reject %</TableHead>
                 <TableHead className="w-[180px]">Remarks</TableHead>
+                <TableHead className="w-[170px]">Created At</TableHead>
               </tr>
             </thead>
 
             <tbody>
               {filteredRows.length > 0 ? (
-                filteredRows.map((row, index) => (
-                  <tr
-                    key={row.id || `${row.date}-${row.machine}-${row.hour}-${index}`}
-                    className="border-b border-slate-200 bg-white align-top hover:bg-slate-50 print:hover:bg-white"
-                  >
-                    <TableCell strong>{row.normalizedDate || row.date || "-"}</TableCell>
-                    <TableCell>{row.hall || "-"}</TableCell>
-                    <TableCell>{row.machine || "-"}</TableCell>
-                    <TableCell>
-                      <span className="inline-flex border border-slate-400 bg-white px-2 py-1 text-xs font-bold text-slate-700 print:border-slate-300 print:bg-white print:text-slate-800">
-                        {row.normalizedShift || "-"}
-                      </span>
-                    </TableCell>
-                    <TableCell clamp>{row.hour || row.duration || "-"}</TableCell>
-                    <TableCell clamp>{row.part || "-"}</TableCell>
-                    <TableCell>{row.operatorId || "-"}</TableCell>
-                    <TableCell clamp>{row.operator || "-"}</TableCell>
-                    <TableCell>
-                      <span className="inline-flex border border-slate-300 bg-slate-50 px-2 py-1 text-xs font-bold text-slate-700">
-                        {row.isNewOperator ? "Yes" : "No"}
-                      </span>
-                    </TableCell>
-                    <TableCell strong>{row.target ?? 0}</TableCell>
-                    <TableCell className="font-bold text-slate-900">{row.actual ?? 0}</TableCell>
-                    <TableCell className="font-bold text-emerald-700 print:text-slate-900">
-                      {row.good ?? 0}
-                    </TableCell>
-                    <TableCell className="font-bold text-rose-700 print:text-slate-900">
-                      {row.reject ?? 0}
-                    </TableCell>
-                    <TableCell className="font-bold text-amber-700 print:text-slate-900">
-                      {row.lossTime ?? 0}
-                    </TableCell>
+                filteredRows.map((row, index) => {
+                  const rowRejectPercent =
+                    row.actual > 0 ? ((row.reject / row.actual) * 100).toFixed(2) : "0.00";
 
-                    {REJECT_REASONS.map((reason) => (
-                      <TableCell key={reason}>{row.reasonWiseRejects?.[reason] ?? 0}</TableCell>
-                    ))}
+                  return (
+                    <tr
+                      key={row.id || `${row.date}-${row.machineDisplay}-${row.hour}-${index}`}
+                      className="border-b border-slate-200 bg-white align-top hover:bg-slate-50 print:hover:bg-white"
+                    >
+                      <TableCell strong>{row.normalizedDate || row.date || "-"}</TableCell>
+                      <TableCell>{row.hall || "-"}</TableCell>
+                      <TableCell clamp>{row.machineDisplay || "-"}</TableCell>
+                      <TableCell>{row.machineCode || "-"}</TableCell>
+                      <TableCell clamp>{row.machineName || "-"}</TableCell>
+                      <TableCell>
+                        <span className="inline-flex border border-slate-400 bg-white px-2 py-1 text-xs font-bold text-slate-700 print:border-slate-300 print:bg-white print:text-slate-800">
+                          {row.normalizedShift || "-"}
+                        </span>
+                      </TableCell>
+                      <TableCell clamp>{row.hour || row.duration || "-"}</TableCell>
+                      <TableCell clamp>{row.part || "-"}</TableCell>
+                      <TableCell>{row.operatorId || "-"}</TableCell>
+                      <TableCell clamp>{row.operator || "-"}</TableCell>
+                      <TableCell>
+                        <span className="inline-flex border border-slate-300 bg-slate-50 px-2 py-1 text-xs font-bold text-slate-700">
+                          {row.isNewOperator ? "Yes" : "No"}
+                        </span>
+                      </TableCell>
+                      <TableCell strong>{row.target ?? 0}</TableCell>
+                      <TableCell className="font-bold text-slate-900">{row.actual ?? 0}</TableCell>
+                      <TableCell className="font-bold text-emerald-700 print:text-slate-900">
+                        {row.good ?? 0}
+                      </TableCell>
+                      <TableCell className="font-bold text-rose-700 print:text-slate-900">
+                        {row.reject ?? 0}
+                      </TableCell>
+                      <TableCell className="font-bold text-amber-700 print:text-slate-900">
+                        {row.lossTime ?? 0}
+                      </TableCell>
 
-                    <TableCell clamp>{row.rejectBreakdownText || "-"}</TableCell>
-                    <TableCell clamp>{row.responsibilitiesTextFormatted || "-"}</TableCell>
-                    <TableCell clamp muted>
-                      {row.remarks || "-"}
-                    </TableCell>
-                  </tr>
-                ))
+                      {REJECT_REASONS.map((reason) => (
+                        <TableCell key={reason}>{row.reasonWiseRejects?.[reason] ?? 0}</TableCell>
+                      ))}
+
+                      <TableCell clamp>{row.rejectBreakdownTextFormatted || "-"}</TableCell>
+                      <TableCell clamp>{row.lossTimeBreakdownTextFormatted || "-"}</TableCell>
+                      <TableCell clamp>{row.responsiblePersonsTextFormatted || "-"}</TableCell>
+                      <TableCell className="font-semibold text-amber-700 print:text-slate-900">
+                        {rowRejectPercent}%
+                      </TableCell>
+                      <TableCell clamp muted>
+                        {row.remarks || "-"}
+                      </TableCell>
+                      <TableCell clamp muted>
+                        {row.createdAt || "-"}
+                      </TableCell>
+                    </tr>
+                  );
+                })
               ) : (
                 <tr>
-                  <td colSpan={17 + REJECT_REASONS.length} className="px-4 py-10 text-center">
+                  <td colSpan={22 + REJECT_REASONS.length} className="px-4 py-10 text-center">
                     <div className="border border-dashed border-slate-300 bg-slate-50 px-4 py-8">
                       <p className="text-sm font-semibold text-slate-700">
                         No production entries found
@@ -595,7 +693,7 @@ export default function HourlyProductionTable({ rows = [] }) {
               <tfoot className="bg-slate-100">
                 <tr className="border-t-2 border-slate-400 text-slate-900">
                   <td
-                    colSpan="9"
+                    colSpan="11"
                     className="px-4 py-3 text-right font-bold uppercase tracking-wide"
                   >
                     Total
@@ -616,7 +714,10 @@ export default function HourlyProductionTable({ rows = [] }) {
                     Reject %: {rejectPercent}%
                   </td>
                   <td className="px-4 py-3 text-slate-700">-</td>
+                  <td className="px-4 py-3 text-slate-700">-</td>
+                  <td className="px-4 py-3 font-semibold text-amber-700">{rejectPercent}%</td>
                   <td className="px-4 py-3 text-slate-700">Rows: {filteredRows.length}</td>
+                  <td className="px-4 py-3 text-slate-700">-</td>
                 </tr>
               </tfoot>
             )}
