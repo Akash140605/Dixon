@@ -11,15 +11,64 @@ const initialFilters = {
 };
 
 const REJECT_REASONS = [
-  "Short Fill",
-  "Power Cut",
-  "Scratch",
-  "Dent",
-  "Black Dot",
+  "Short Moulding",
+  "Silver Mark",
+  "Black Spot",
+  "Colour Change",
+  "Warpage",
   "Flow Mark",
+  "Shrinkage",
+  "Mixing",
   "Burn Mark",
-  "Crack",
+  "Weld Line",
 ];
+
+const normalizeTextValue = (value) =>
+  String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
+
+const REJECT_REASON_ALIASES = {
+  "short moulding": "Short Moulding",
+  "short molding": "Short Moulding",
+  "short fill": "Short Moulding",
+  "short shot": "Short Moulding",
+
+  "silver mark": "Silver Mark",
+  "silver marks": "Silver Mark",
+
+  "black spot": "Black Spot",
+  "black dot": "Black Spot",
+  "black mark": "Black Spot",
+
+  "colour change": "Colour Change",
+  "color change": "Colour Change",
+  "colour variation": "Colour Change",
+  "color variation": "Colour Change",
+
+  "warpage": "Warpage",
+  "warp age": "Warpage",
+
+  "flow mark": "Flow Mark",
+  "flow marks": "Flow Mark",
+  "cut mark": "Flow Mark",
+  "cut marks": "Flow Mark",
+
+  "shrinkage": "Shrinkage",
+  "shrink": "Shrinkage",
+
+  "mixing": "Mixing",
+  "micing": "Mixing",
+  "material mixing": "Mixing",
+
+  "burn mark": "Burn Mark",
+  "burn marks": "Burn Mark",
+  "burn": "Burn Mark",
+
+  "weld line": "Weld Line",
+  "weld lines": "Weld Line",
+};
 
 const normalizeShift = (value) => {
   const shift = String(value || "").trim().toUpperCase();
@@ -34,17 +83,61 @@ const normalizeShift = (value) => {
 
 const normalizeDate = (value) => {
   if (!value) return "";
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return value.toISOString().slice(0, 10);
+  }
+
   const raw = String(value).trim();
   const parsed = new Date(raw);
   if (!Number.isNaN(parsed.getTime())) return parsed.toISOString().slice(0, 10);
+
+  const excelLikeDate = raw.match(/^(\d{1,2})[./-](\d{1,2})[./-](\d{2,4})$/);
+  if (excelLikeDate) {
+    const [, d, m, y] = excelLikeDate;
+    const year = y.length === 2 ? `20${y}` : y;
+    return `${year}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+  }
+
   return raw;
+};
+
+const getCanonicalRejectReason = (value) => {
+  const normalized = normalizeTextValue(value);
+  if (!normalized) return "";
+
+  return (
+    REJECT_REASON_ALIASES[normalized] ||
+    REJECT_REASONS.find((reason) => normalizeTextValue(reason) === normalized) ||
+    ""
+  );
+};
+
+const parseRejectBreakdownText = (value) => {
+  if (!value || typeof value !== "string") return [];
+
+  return value
+    .split(",")
+    .map((chunk) => chunk.trim())
+    .filter(Boolean)
+    .map((chunk) => {
+      const match = chunk.match(/^(.*?):\s*(\d+(?:\.\d+)?)$/);
+      if (!match) return null;
+
+      return {
+        reason: match[1].trim(),
+        qty: Number(match[2] || 0),
+      };
+    })
+    .filter(Boolean);
 };
 
 const formatRejectBreakdown = (row) => {
   if (row.rejectBreakdownText) return String(row.rejectBreakdownText);
 
   if (Array.isArray(row.rejectBreakdown) && row.rejectBreakdown.length) {
-    return row.rejectBreakdown.map((item) => `${item.reason}: ${item.qty}`).join(", ");
+    return row.rejectBreakdown
+      .map((item) => `${item.reason}: ${Number(item.qty || 0)}`)
+      .join(", ");
   }
 
   if (row.rejectReason) return String(row.rejectReason);
@@ -105,24 +198,25 @@ const getReasonWiseRejects = (row) => {
     return acc;
   }, {});
 
-  if (Array.isArray(row.rejectBreakdown) && row.rejectBreakdown.length) {
-    row.rejectBreakdown.forEach((item) => {
-      const matchedReason = REJECT_REASONS.find(
-        (reason) =>
-          reason.toLowerCase() === String(item.reason || "").trim().toLowerCase()
-      );
+  const breakdownRows =
+    Array.isArray(row.rejectBreakdown) && row.rejectBreakdown.length
+      ? row.rejectBreakdown
+      : parseRejectBreakdownText(
+          row.rejectBreakdownText || row.rejectBreakdownTextFormatted || ""
+        );
+
+  if (breakdownRows.length) {
+    breakdownRows.forEach((item) => {
+      const matchedReason = getCanonicalRejectReason(item?.reason);
       if (matchedReason) {
-        base[matchedReason] += Number(item.qty || 0);
+        base[matchedReason] += Number(item?.qty || 0);
       }
     });
     return base;
   }
 
   if (row.rejectReason) {
-    const matchedReason = REJECT_REASONS.find(
-      (reason) =>
-        reason.toLowerCase() === String(row.rejectReason || "").trim().toLowerCase()
-    );
+    const matchedReason = getCanonicalRejectReason(row.rejectReason);
     if (matchedReason) {
       base[matchedReason] = Number(row.reject || 0);
     }
@@ -149,10 +243,13 @@ const getReasonTotals = (rows) => {
 const getMachineDisplay = (row) => {
   if (typeof row.machine === "string" && row.machine.trim()) return row.machine;
   if (row.machine?.displayName) return row.machine.displayName;
+  if (row.machineDisplayName) return row.machineDisplayName;
   if (row.machineCode && row.machineName) return `${row.machineCode} - ${row.machineName}`;
   if (row.machineCode) return row.machineCode;
   return "";
 };
+
+const formatNumber = (value) => Number(value || 0).toLocaleString("en-IN");
 
 export default function HourlyProductionTable({ rows = [] }) {
   const [filters, setFilters] = useState(initialFilters);
@@ -163,19 +260,31 @@ export default function HourlyProductionTable({ rows = [] }) {
       const actual = Number(row.actual ?? 0);
       const reject = Number(row.reject ?? 0);
       const good = Number(row.good ?? Math.max(actual - reject, 0));
-      const lossTime = Number(
-        row.lossTime ?? Math.max(target - actual, 0)
-      );
+      const lossTime = Number(row.lossTime ?? Math.max(target - actual, 0));
+
+      const parsedRejectBreakdown =
+        Array.isArray(row.rejectBreakdown) && row.rejectBreakdown.length
+          ? row.rejectBreakdown
+          : parseRejectBreakdownText(row.rejectBreakdownText || "");
+
+      const reasonWiseRejects = getReasonWiseRejects({
+        ...row,
+        rejectBreakdown: parsedRejectBreakdown,
+      });
 
       return {
         ...row,
+        rejectBreakdown: parsedRejectBreakdown,
         machineDisplay: getMachineDisplay(row),
         normalizedDate: normalizeDate(row.date),
         normalizedShift: normalizeShift(row.shiftLabel || row.shift),
-        rejectBreakdownTextFormatted: formatRejectBreakdown(row),
+        rejectBreakdownTextFormatted: formatRejectBreakdown({
+          ...row,
+          rejectBreakdown: parsedRejectBreakdown,
+        }),
         responsiblePersonsTextFormatted: formatResponsiblePersons(row),
         lossTimeBreakdownTextFormatted: formatLossTimeBreakdown(row),
-        reasonWiseRejects: getReasonWiseRejects(row),
+        reasonWiseRejects,
         target,
         actual,
         good,
@@ -246,8 +355,7 @@ export default function HourlyProductionTable({ rows = [] }) {
 
       const matchesDate = !filterDate || date.includes(filterDate);
       const matchesHall = !filters.hall || hall === filters.hall.toLowerCase();
-      const matchesMachine =
-        !filters.machine || machine === filters.machine.toLowerCase();
+      const matchesMachine = !filters.machine || machine === filters.machine.toLowerCase();
       const matchesShift = !filters.shift || shift === filters.shift.toLowerCase();
       const matchesRejectReason =
         !filterRejectReason ||
@@ -377,7 +485,7 @@ export default function HourlyProductionTable({ rows = [] }) {
       { wch: 14 },
       { wch: 18 },
       { wch: 8 },
-      { wch: 16 },
+      { wch: 18 },
       { wch: 22 },
       { wch: 16 },
       { wch: 18 },
@@ -387,10 +495,10 @@ export default function HourlyProductionTable({ rows = [] }) {
       { wch: 10 },
       { wch: 10 },
       { wch: 12 },
-      ...REJECT_REASONS.map(() => ({ wch: 12 })),
+      ...REJECT_REASONS.map(() => ({ wch: 15 })),
+      { wch: 38 },
+      { wch: 44 },
       { wch: 32 },
-      { wch: 36 },
-      { wch: 28 },
       { wch: 12 },
       { wch: 24 },
       { wch: 22 },
@@ -423,7 +531,7 @@ export default function HourlyProductionTable({ rows = [] }) {
               Hourly Production Report
             </h2>
             <p className="mt-1 max-w-2xl text-sm text-slate-600">
-              Hall, machine, shift, part, operator, loss time aur reason-wise rejection reporting.
+              Hall, machine, shift, part, operator, loss time aur expanded reason-wise rejection reporting.
             </p>
           </div>
 
@@ -453,20 +561,20 @@ export default function HourlyProductionTable({ rows = [] }) {
         </div>
 
         <div className="no-print mb-5 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
-          <SummaryCard label="Target" value={totals.target} tone="slate" />
-          <SummaryCard label="Actual" value={totals.actual} tone="blue" />
-          <SummaryCard label="Good" value={totals.good} tone="emerald" />
-          <SummaryCard label="Reject" value={totals.reject} tone="rose" />
-          <SummaryCard label="Loss Time" value={totals.lossTime} tone="amber" />
+          <SummaryCard label="Target" value={formatNumber(totals.target)} tone="slate" />
+          <SummaryCard label="Actual" value={formatNumber(totals.actual)} tone="blue" />
+          <SummaryCard label="Good" value={formatNumber(totals.good)} tone="emerald" />
+          <SummaryCard label="Reject" value={formatNumber(totals.reject)} tone="rose" />
+          <SummaryCard label="Loss Time" value={formatNumber(totals.lossTime)} tone="amber" />
           <SummaryCard label="Reject %" value={`${rejectPercent}%`} tone="neutral" />
         </div>
 
-        <div className="no-print mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-8">
+        <div className="no-print mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-10">
           {REJECT_REASONS.map((reason) => (
             <SummaryCard
               key={reason}
               label={reason}
-              value={totals.reasonWiseRejects[reason]}
+              value={formatNumber(totals.reasonWiseRejects[reason])}
               tone="neutral"
               compact
             />
@@ -569,7 +677,7 @@ export default function HourlyProductionTable({ rows = [] }) {
                 name="rejectReason"
                 value={filters.rejectReason}
                 onChange={handleFilterChange}
-                placeholder="Short Fill, Crack..."
+                placeholder="Short Moulding, Weld Line..."
                 className="filter-input"
               />
             </FilterInput>
@@ -577,35 +685,35 @@ export default function HourlyProductionTable({ rows = [] }) {
         </div>
 
         <div className="table-scroll-wrap border border-slate-300 bg-white">
-          <table className="printable-table min-w-[3200px] table-fixed text-sm">
+          <table className="printable-table min-w-[4200px] table-fixed text-sm">
             <thead className="print:bg-transparent">
               <tr className="border-b border-slate-400 text-slate-800">
                 <TableHead className="w-[110px]">Date</TableHead>
                 <TableHead className="w-[90px]">Hall</TableHead>
-                <TableHead className="w-[160px]">Machine Display</TableHead>
+                <TableHead className="w-[180px]">Machine Display</TableHead>
                 <TableHead className="w-[110px]">Machine Code</TableHead>
-                <TableHead className="w-[140px]">Machine Name</TableHead>
+                <TableHead className="w-[150px]">Machine Name</TableHead>
                 <TableHead className="w-[70px]">Shift</TableHead>
-                <TableHead className="w-[120px]">Hour</TableHead>
-                <TableHead className="w-[150px]">Part</TableHead>
+                <TableHead className="w-[130px]">Hour</TableHead>
+                <TableHead className="w-[160px]">Part</TableHead>
                 <TableHead className="w-[100px]">Operator ID</TableHead>
-                <TableHead className="w-[140px]">Operator</TableHead>
+                <TableHead className="w-[150px]">Operator</TableHead>
                 <TableHead className="w-[110px]">New Operator</TableHead>
-                <TableHead className="w-[80px]">Target</TableHead>
-                <TableHead className="w-[80px]">Actual</TableHead>
-                <TableHead className="w-[80px]">Good</TableHead>
-                <TableHead className="w-[80px]">Reject</TableHead>
-                <TableHead className="w-[90px]">Loss Time</TableHead>
+                <TableHead className="w-[90px]">Target</TableHead>
+                <TableHead className="w-[90px]">Actual</TableHead>
+                <TableHead className="w-[90px]">Good</TableHead>
+                <TableHead className="w-[90px]">Reject</TableHead>
+                <TableHead className="w-[100px]">Loss Time</TableHead>
 
                 {REJECT_REASONS.map((reason) => (
-                  <TableHead key={reason} className="w-[95px]">
+                  <TableHead key={reason} className="w-[120px]">
                     {reason}
                   </TableHead>
                 ))}
 
-                <TableHead className="w-[210px]">Reject Breakdown</TableHead>
-                <TableHead className="w-[260px]">Loss Time Breakdown</TableHead>
-                <TableHead className="w-[220px]">Responsible Persons</TableHead>
+                <TableHead className="w-[260px]">Reject Breakdown</TableHead>
+                <TableHead className="w-[320px]">Loss Time Breakdown</TableHead>
+                <TableHead className="w-[240px]">Responsible Persons</TableHead>
                 <TableHead className="w-[100px]">Reject %</TableHead>
                 <TableHead className="w-[180px]">Remarks</TableHead>
                 <TableHead className="w-[170px]">Created At</TableHead>
@@ -642,20 +750,24 @@ export default function HourlyProductionTable({ rows = [] }) {
                           {row.isNewOperator ? "Yes" : "No"}
                         </span>
                       </TableCell>
-                      <TableCell strong>{row.target ?? 0}</TableCell>
-                      <TableCell className="font-bold text-slate-900">{row.actual ?? 0}</TableCell>
+                      <TableCell strong>{formatNumber(row.target)}</TableCell>
+                      <TableCell className="font-bold text-slate-900">
+                        {formatNumber(row.actual)}
+                      </TableCell>
                       <TableCell className="font-bold text-emerald-700 print:text-slate-900">
-                        {row.good ?? 0}
+                        {formatNumber(row.good)}
                       </TableCell>
                       <TableCell className="font-bold text-rose-700 print:text-slate-900">
-                        {row.reject ?? 0}
+                        {formatNumber(row.reject)}
                       </TableCell>
                       <TableCell className="font-bold text-amber-700 print:text-slate-900">
-                        {row.lossTime ?? 0}
+                        {formatNumber(row.lossTime)}
                       </TableCell>
 
                       {REJECT_REASONS.map((reason) => (
-                        <TableCell key={reason}>{row.reasonWiseRejects?.[reason] ?? 0}</TableCell>
+                        <TableCell key={reason}>
+                          {formatNumber(row.reasonWiseRejects?.[reason] ?? 0)}
+                        </TableCell>
                       ))}
 
                       <TableCell clamp>{row.rejectBreakdownTextFormatted || "-"}</TableCell>
@@ -698,15 +810,21 @@ export default function HourlyProductionTable({ rows = [] }) {
                   >
                     Total
                   </td>
-                  <td className="px-4 py-3 font-bold">{totals.target}</td>
-                  <td className="px-4 py-3 font-bold">{totals.actual}</td>
-                  <td className="px-4 py-3 font-bold text-emerald-700">{totals.good}</td>
-                  <td className="px-4 py-3 font-bold text-rose-700">{totals.reject}</td>
-                  <td className="px-4 py-3 font-bold text-amber-700">{totals.lossTime}</td>
+                  <td className="px-4 py-3 font-bold">{formatNumber(totals.target)}</td>
+                  <td className="px-4 py-3 font-bold">{formatNumber(totals.actual)}</td>
+                  <td className="px-4 py-3 font-bold text-emerald-700">
+                    {formatNumber(totals.good)}
+                  </td>
+                  <td className="px-4 py-3 font-bold text-rose-700">
+                    {formatNumber(totals.reject)}
+                  </td>
+                  <td className="px-4 py-3 font-bold text-amber-700">
+                    {formatNumber(totals.lossTime)}
+                  </td>
 
                   {REJECT_REASONS.map((reason) => (
                     <td key={reason} className="px-4 py-3 font-bold">
-                      {totals.reasonWiseRejects[reason]}
+                      {formatNumber(totals.reasonWiseRejects[reason])}
                     </td>
                   ))}
 

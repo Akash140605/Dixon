@@ -124,7 +124,7 @@ function PerformanceCard({
 
               return (
                 <div
-                  key={name || index}
+                  key={`${name}-${index}`}
                   className="border border-slate-200 bg-slate-50 p-4 shadow-sm"
                 >
                   <div className="flex flex-col gap-4">
@@ -238,6 +238,7 @@ export default function Dashboard() {
     operatorWiseProduction,
   } = useProduction();
 
+  const summary = filteredDashboardData?.summary || {};
   const dayWiseTrend = filteredDashboardData?.dayWiseTrend || [];
   const shiftWiseData = filteredDashboardData?.shiftWiseProduction || [];
   const rejectionBreakdown = filteredDashboardData?.rejectionBreakdown || [];
@@ -247,27 +248,17 @@ export default function Dashboard() {
   const operatorData = operatorWiseProduction || [];
   const machineTrendData = machineHourlyTrend || [];
 
-  const totalTarget = hallData.reduce(
-    (sum, item) => sum + Number(item.target || 0),
-    0
-  );
-  const totalActual = hallData.reduce(
-    (sum, item) => sum + Number(item.actual || 0),
-    0
-  );
-  const totalGood = hallData.reduce(
-    (sum, item) => sum + Number(item.good || 0),
-    0
-  );
-  const totalReject = hallData.reduce(
-    (sum, item) => sum + Number(item.reject || 0),
-    0
-  );
+  const totalTarget = Number(summary.targetProduction || 0);
+  const totalActual = Number(summary.totalProduction || 0);
+  const totalGood = Number(summary.goodProduction || 0);
+  const totalReject = Number(summary.rejection || 0);
 
   const overallAchievement =
     totalTarget > 0 ? (totalActual / totalTarget) * 100 : 0;
   const overallRejectRate =
     totalActual > 0 ? (totalReject / totalActual) * 100 : 0;
+  const overallGoodRate =
+    totalActual > 0 ? (totalGood / totalActual) * 100 : 0;
 
   return (
     <div className="min-h-screen bg-slate-100 text-slate-900">
@@ -277,7 +268,7 @@ export default function Dashboard() {
         <div className="space-y-6 p-4 md:p-6 xl:p-8">
           <FilterBar />
 
-          <section className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <section className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5">
             <KpiCard
               label="Total Target"
               value={formatNumber(totalTarget)}
@@ -288,6 +279,12 @@ export default function Dashboard() {
               value={formatNumber(totalActual)}
               tone="sky"
               hint="Produced"
+            />
+            <KpiCard
+              label="Total Good"
+              value={formatNumber(totalGood)}
+              tone="emerald"
+              hint={`${overallGoodRate.toFixed(1)}%`}
             />
             <KpiCard
               label="Achievement"

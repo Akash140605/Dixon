@@ -18,39 +18,15 @@ function createEntryId() {
 }
 
 function parseHourLabel(hourLabel = "") {
-  const firstPart = hourLabel.split("-")[0]?.trim() || "";
-  return firstPart;
+  return hourLabel.split("-")[0]?.trim() || "";
 }
 
 function normalizeShift(shiftValue = "") {
   if (!shiftValue) return "";
 
-  if (
-    shiftValue === "A" ||
-    shiftValue === "Shift A" ||
-    shiftValue === "Shift 1" ||
-    shiftValue === "1"
-  ) {
-    return "Shift A";
-  }
-
-  if (
-    shiftValue === "B" ||
-    shiftValue === "Shift B" ||
-    shiftValue === "Shift 2" ||
-    shiftValue === "2"
-  ) {
-    return "Shift B";
-  }
-
-  if (
-    shiftValue === "C" ||
-    shiftValue === "Shift C" ||
-    shiftValue === "Shift 3" ||
-    shiftValue === "3"
-  ) {
-    return "Shift C";
-  }
+  if (["A", "Shift A", "Shift 1", "1"].includes(shiftValue)) return "Shift A";
+  if (["B", "Shift B", "Shift 2", "2"].includes(shiftValue)) return "Shift B";
+  if (["C", "Shift C", "Shift 3", "3"].includes(shiftValue)) return "Shift C";
 
   return shiftValue.startsWith("Shift ") ? shiftValue : `Shift ${shiftValue}`;
 }
@@ -59,7 +35,6 @@ function formatDisplayDate(dateString) {
   if (!dateString) return "";
 
   const date = new Date(dateString);
-
   if (Number.isNaN(date.getTime())) return "";
 
   return date.toLocaleDateString("en-GB", {
@@ -86,8 +61,10 @@ function normalizeResponsibilities(responsibilities = []) {
     .map((item) => ({
       person: item?.person || item?.name || "",
       department: item?.department || "",
+      reason: item?.reason || "",
+      qty: Number(item?.qty || 0),
     }))
-    .filter((item) => item.person);
+    .filter((item) => item.person || item.reason || item.qty > 0);
 }
 
 function buildRejectReasonText(rejectBreakdown = [], rejectReason = "") {
@@ -102,9 +79,16 @@ function buildResponsibilitiesText(responsibilities = []) {
   if (!Array.isArray(responsibilities) || responsibilities.length === 0) return "";
 
   return responsibilities
-    .map((item) =>
-      item.department ? `${item.person} (${item.department})` : item.person
-    )
+    .map((item) => {
+      const personText = item.department
+        ? `${item.person} (${item.department})`
+        : item.person;
+
+      return item.reason
+        ? `${item.reason}: ${item.qty}${personText ? ` - ${personText}` : ""}`
+        : personText;
+    })
+    .filter(Boolean)
     .join(", ");
 }
 
@@ -118,7 +102,17 @@ function getMachineDisplay(row = {}) {
 
 function normalizeHourlyRow(row = {}) {
   const normalizedBreakdown = normalizeRejectBreakdown(row.rejectBreakdown);
-  const normalizedResponsibilities = normalizeResponsibilities(row.responsibilities);
+  const normalizedResponsibilities = normalizeResponsibilities(
+    row.lossTimeBreakdown || row.responsibilities || []
+  );
+
+  const actual = Number(row.actual || 0);
+  const reject = Number(row.reject || 0);
+  const target = Number(row.target || 0);
+  const good =
+    row.good !== undefined && row.good !== null
+      ? Number(row.good || 0)
+      : Math.max(actual - reject, 0);
 
   return {
     ...row,
@@ -130,12 +124,12 @@ function normalizeHourlyRow(row = {}) {
     shift: normalizeShift(row.shift || row.shiftLabel || "").replace("Shift ", ""),
     hour: row.hour || row.duration || "",
     duration: row.duration || row.hour || "",
-    actual: Number(row.actual || 0),
-    good: Number(row.good || 0),
-    reject: Number(row.reject || 0),
-    target: Number(row.target || 0),
-    lossTime: Number(row.lossTime || Math.max(Number(row.target || 0) - Number(row.actual || 0), 0)),
-    rejectReason: row.rejectReason || "",
+    actual,
+    good,
+    reject,
+    target,
+    lossTime: Number(row.lossTime || Math.max(target - actual, 0)),
+    rejectReason: row.rejectReason || normalizedBreakdown[0]?.reason || "",
     rejectBreakdown: normalizedBreakdown,
     rejectBreakdownText: buildRejectReasonText(
       normalizedBreakdown,
@@ -198,7 +192,6 @@ function buildDayWiseTrend(hourlyTable) {
 
   hourlyTable.forEach((row) => {
     const shortDate = formatDisplayDate(row.date);
-
     if (!shortDate) return;
 
     if (!dayWiseMap.has(shortDate)) {
@@ -272,10 +265,9 @@ function buildRejectionBreakdown(hourlyTable) {
     }
   });
 
-  return Array.from(rejectionMap.entries()).map(([reason, value]) => ({
-    reason,
-    value,
-  }));
+  return Array.from(rejectionMap.entries())
+    .map(([reason, value]) => ({ reason, value }))
+    .sort((a, b) => b.value - a.value);
 }
 
 function buildMachineHourlyTrend(hourlyTable) {
@@ -355,7 +347,7 @@ function buildHallWiseProduction(hourlyTable) {
     current.lossTime += Number(row.lossTime || 0);
   });
 
-  return Array.from(hallMap.values());
+  return Array.from(hallMap.values()).sort((a, b) => b.actual - a.actual);
 }
 
 function buildOperatorWiseProduction(hourlyTable) {
@@ -410,25 +402,29 @@ function buildBaseDashboardState(hourlyTable = []) {
   };
 }
 
+function getInitialNormalizedRows() {
+  return Array.isArray(initialDashboardData.hourlyTable)
+    ? initialDashboardData.hourlyTable.map(normalizeHourlyRow)
+    : [];
+}
+
 function safeReadStorage() {
+  if (typeof window === "undefined") {
+    return buildBaseDashboardState(getInitialNormalizedRows());
+  }
+
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
 
     if (!saved) {
-      const normalizedHourlyTable = Array.isArray(initialDashboardData.hourlyTable)
-        ? initialDashboardData.hourlyTable.map(normalizeHourlyRow)
-        : [];
-
-      return buildBaseDashboardState(normalizedHourlyTable);
+      return buildBaseDashboardState(getInitialNormalizedRows());
     }
 
     const parsed = JSON.parse(saved);
 
     const normalizedHourlyTable = Array.isArray(parsed?.hourlyTable)
       ? parsed.hourlyTable.map(normalizeHourlyRow)
-      : Array.isArray(initialDashboardData.hourlyTable)
-      ? initialDashboardData.hourlyTable.map(normalizeHourlyRow)
-      : [];
+      : getInitialNormalizedRows();
 
     return {
       ...initialDashboardData,
@@ -437,11 +433,7 @@ function safeReadStorage() {
       ...buildDerivedDashboardData(normalizedHourlyTable),
     };
   } catch {
-    const normalizedHourlyTable = Array.isArray(initialDashboardData.hourlyTable)
-      ? initialDashboardData.hourlyTable.map(normalizeHourlyRow)
-      : [];
-
-    return buildBaseDashboardState(normalizedHourlyTable);
+    return buildBaseDashboardState(getInitialNormalizedRows());
   }
 }
 
@@ -450,26 +442,26 @@ export function ProductionProvider({ children }) {
   const [filters, setFilters] = useState(initialFilters);
 
   useEffect(() => {
+    if (typeof window === "undefined") return;
     localStorage.setItem(STORAGE_KEY, JSON.stringify(dashboardData));
   }, [dashboardData]);
 
   const addProductionEntry = (entry) => {
     setDashboardData((prev) => {
       const actual = Number(entry.actual || 0);
-      const good = Number(entry.good || 0);
       const reject = Number(entry.reject || 0);
       const target = Number(entry.target || 0);
-      const lossTime = Number(
-        entry.lossTime || Math.max(target - actual, 0)
-      );
+      const good =
+        entry.good !== undefined && entry.good !== null
+          ? Number(entry.good || 0)
+          : Math.max(actual - reject, 0);
+      const lossTime = Number(entry.lossTime || Math.max(target - actual, 0));
 
-      const normalizedShift = normalizeShift(entry.shift);
+      const normalizedShift = normalizeShift(entry.shift || entry.shiftLabel);
       const compactShift = normalizedShift.replace("Shift ", "");
-      const normalizedBreakdown = normalizeRejectBreakdown(
-        entry.rejectBreakdown || []
-      );
+      const normalizedBreakdown = normalizeRejectBreakdown(entry.rejectBreakdown || []);
       const normalizedResponsibilities = normalizeResponsibilities(
-        entry.responsibilities || []
+        entry.lossTimeBreakdown || entry.responsibilities || []
       );
 
       const newHourlyEntry = normalizeHourlyRow({
@@ -481,8 +473,8 @@ export function ProductionProvider({ children }) {
         machineName: entry.machineName || "",
         shift: compactShift,
         shiftLabel: normalizedShift,
-        hour: entry.duration,
-        duration: entry.duration,
+        hour: entry.hour || entry.duration,
+        duration: entry.duration || entry.hour,
         part: entry.part,
         actual,
         good,
@@ -494,7 +486,7 @@ export function ProductionProvider({ children }) {
         isNewOperator: Boolean(entry.isNewOperator),
         rejectReason: normalizedBreakdown[0]?.reason || entry.rejectReason || "",
         rejectBreakdown: normalizedBreakdown,
-        responsibilities: normalizedResponsibilities,
+        lossTimeBreakdown: normalizedResponsibilities,
         remarks: entry.remarks || "",
         createdAt: entry.createdAt || new Date().toISOString(),
       });
@@ -515,13 +507,11 @@ export function ProductionProvider({ children }) {
   };
 
   const resetDashboardData = () => {
-    localStorage.removeItem(STORAGE_KEY);
+    if (typeof window !== "undefined") {
+      localStorage.removeItem(STORAGE_KEY);
+    }
 
-    const normalizedHourlyTable = Array.isArray(initialDashboardData.hourlyTable)
-      ? initialDashboardData.hourlyTable.map(normalizeHourlyRow)
-      : [];
-
-    setDashboardData(buildBaseDashboardState(normalizedHourlyTable));
+    setDashboardData(buildBaseDashboardState(getInitialNormalizedRows()));
     setFilters(initialFilters);
   };
 
@@ -532,8 +522,8 @@ export function ProductionProvider({ children }) {
 
       const rowShiftLabel = normalizeShift(row.shiftLabel || row.shift);
       const filterShiftLabel = normalizeShift(filters.shift);
-
       const shiftMatch = !filters.shift || rowShiftLabel === filterShiftLabel;
+
       const machineMatch = !filters.machine || row.machine === filters.machine;
 
       const operatorMatch =

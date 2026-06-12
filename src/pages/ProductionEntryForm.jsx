@@ -11,34 +11,38 @@ const STORAGE_KEYS = {
 };
 
 const rejectReasonOptions = [
-  "Short Fill",
-  "Power Cut",
-  "Scratch",
-  "Dent",
-  "Black Dot",
+  "Short Moulding",
+  "Silver Mark",
+  "Black Spot",
+  "Colour Change",
+  "Colour Variation",
+  "Warpage",
   "Flow Mark",
+  "Cut Mark",
+  "Shrinkage",
+  "Missing",
   "Burn Mark",
-  "Crack",
+  "Weld Line",
 ];
 
 const lossTimeReasonOptions = [
-  "Machine Breakdown",
-  "Mould Breakdown",
-  "Process Trouble",
-  "Setup / Adjustment",
+  "Breakdown - Machine Breakdown",
+  "Breakdown - Mould Breakdown",
+  "Breakdown - Process Trouble",
+  "Setup / Adjustment - Mould Change",
   "Tool Change - Mould Polishing / Cleaning",
   "Tool Change - Nozzle Change",
-  "Tool Change - Insert / Pin / Slider / Spring / Coupler Change",
-  "Start-up Loss",
-  "Minor Stoppages",
-  "Speed Loss",
-  "Defect and Rework Loss",
-  "Schedule Down Time",
-  "No Manpower",
-  "No Power",
-  "Raw Material Shortage",
-  "Conveyor Stop",
-  "Bin / Trolly Short",
+  "Tool Change - Insert / Ejector Pin / Slider Pin / Spring / Coupler / Copper Electrode Change",
+  "Start-up Loss - Shift Start Delay",
+  "Minor Stoppages - Under 10 Min",
+  "Speed Loss - Unskilled Manpower / Actual Speed Low",
+  "Defect & Rework Loss",
+  "Schedule Down Time - Planned Stoppage",
+  "Management Loss - No Manpower",
+  "Management Loss - No Power",
+  "Management Loss - Raw Material Shortage",
+  "Management Loss - Conveyor Stop",
+  "Management Loss - Bin / Trolly Short",
   "Operating Motion Loss",
   "Other",
 ];
@@ -116,11 +120,13 @@ const getShiftByDuration = (duration) => {
   return "Shift C";
 };
 
-const createRejectBreakdown = () =>
-  rejectReasonOptions.map((reason) => ({
-    reason,
-    qty: "",
-  }));
+const createRejectRow = () => ({
+  id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+  reason: "",
+  qty: "",
+});
+
+const createRejectBreakdown = () => [createRejectRow()];
 
 const createLossTimeRow = () => ({
   reason: "",
@@ -135,9 +141,6 @@ const getRejectBreakdownTotal = (breakdown) =>
 const getLossTimeBreakdownTotal = (rows) =>
   rows.reduce((sum, item) => sum + Number(item.qty || 0), 0);
 
-const calculateRejectFromBreakdown = (breakdown) =>
-  String(getRejectBreakdownTotal(breakdown));
-
 const calculateGood = (actualValue, rejectValue) => {
   const actual = Number(actualValue || 0);
   const reject = Number(rejectValue || 0);
@@ -148,6 +151,11 @@ const calculateLossTime = (targetValue, actualValue) => {
   const target = Number(targetValue || 0);
   const actual = Number(actualValue || 0);
   return target - actual >= 0 ? String(target - actual) : "0";
+};
+
+const isNonNegativeNumber = (value) => {
+  if (value === "" || value === null || value === undefined) return true;
+  return !Number.isNaN(Number(value)) && Number(value) >= 0;
 };
 
 const getInitialFormState = () => ({
@@ -177,9 +185,26 @@ const getStoredJson = (key, fallbackValue) => {
   try {
     const value = localStorage.getItem(key);
     return value ? JSON.parse(value) : fallbackValue;
-  } catch (error) {
+  } catch {
     return fallbackValue;
   }
+};
+
+const normalizeRejectBreakdown = (rejectBreakdown) => {
+  if (!Array.isArray(rejectBreakdown) || !rejectBreakdown.length) {
+    return createRejectBreakdown();
+  }
+
+  return rejectBreakdown.map((item) => ({
+    id: item?.id || `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    reason: typeof item?.reason === "string" ? item.reason : "",
+    qty:
+      item?.qty === 0
+        ? "0"
+        : item?.qty
+        ? String(item.qty)
+        : "",
+  }));
 };
 
 const mergeDraftWithDefaults = (draft) => ({
@@ -192,15 +217,77 @@ const mergeDraftWithDefaults = (draft) => ({
     typeof draft?.machineDisplayName === "string"
       ? draft.machineDisplayName
       : "",
-  rejectBreakdown:
-    Array.isArray(draft?.rejectBreakdown) && draft.rejectBreakdown.length
-      ? draft.rejectBreakdown
-      : createRejectBreakdown(),
+  rejectBreakdown: normalizeRejectBreakdown(draft?.rejectBreakdown),
   lossTimeBreakdown:
     Array.isArray(draft?.lossTimeBreakdown) && draft.lossTimeBreakdown.length
       ? draft.lossTimeBreakdown
       : [createLossTimeRow()],
 });
+
+const getFormValidationErrors = (form) => {
+  const errors = {};
+
+  const actual = Number(form.actual || 0);
+  const target = Number(form.target || 0);
+  const reject = Number(form.reject || 0);
+  const lossTime = Math.max(target - actual, 0);
+  const rejectBreakdownTotal = getRejectBreakdownTotal(form.rejectBreakdown);
+  const lossTimeBreakdownTotal = getLossTimeBreakdownTotal(form.lossTimeBreakdown);
+
+  if (form.target !== "" && !isNonNegativeNumber(form.target)) {
+    errors.target = "Target quantity must be zero or greater.";
+  }
+
+  if (form.actual !== "" && !isNonNegativeNumber(form.actual)) {
+    errors.actual = "Actual quantity must be zero or greater.";
+  }
+
+  if (form.reject !== "" && !isNonNegativeNumber(form.reject)) {
+    errors.reject = "Rejected quantity must be zero or greater.";
+  }
+
+  if (target > 0 && actual > target) {
+    errors.actual = "Actual quantity cannot exceed target quantity.";
+  }
+
+  if (reject > actual) {
+    errors.reject = "Rejected quantity cannot exceed actual production.";
+  }
+
+  if (reject > 0) {
+    if (rejectBreakdownTotal !== reject) {
+      errors.rejectBreakdown = `Rejection breakdown total is ${rejectBreakdownTotal}. It must match rejected quantity ${reject}.`;
+    }
+
+    form.rejectBreakdown.forEach((item) => {
+      if (
+        (item.reason && !Number(item.qty || 0)) ||
+        (!item.reason && Number(item.qty || 0) > 0)
+      ) {
+        errors[`rejectRow-${item.id}`] =
+          "Enter a valid rejection reason and quantity.";
+      }
+    });
+  }
+
+  if (lossTime > 0) {
+    if (lossTimeBreakdownTotal !== lossTime) {
+      errors.lossTimeBreakdown = `Loss time breakdown total is ${lossTimeBreakdownTotal}. It must match production loss time ${lossTime}.`;
+    }
+
+    form.lossTimeBreakdown.forEach((item, index) => {
+      const matchedPerson = getResponsibilityMatch(item.person);
+      if (item.reason || item.qty || item.person) {
+        if (!item.reason || Number(item.qty || 0) <= 0 || !item.person || !matchedPerson) {
+          errors[`lossRow-${index}`] =
+            "Enter valid reason, quantity and responsible person.";
+        }
+      }
+    });
+  }
+
+  return errors;
+};
 
 export default function ProductionEntryForm() {
   const navigate = useNavigate();
@@ -245,25 +332,42 @@ export default function ProductionEntryForm() {
   const lossTimeBreakdownTotal = getLossTimeBreakdownTotal(form.lossTimeBreakdown);
   const lossTimeDifference = lossTimeQty - lossTimeBreakdownTotal;
   const showLossTimeFields = lossTimeQty > 0;
+  const showRejectBreakdown = rejectQty > 0;
   const showNewOperatorNameField = form.isNewOperator;
 
+  const validationErrors = useMemo(() => getFormValidationErrors(form), [form]);
+
   const syncDerivedValues = (draft) => {
-    const reject = calculateRejectFromBreakdown(draft.rejectBreakdown);
-    const good = calculateGood(draft.actual, reject);
+    const good = calculateGood(draft.actual, draft.reject);
     const lossTime = calculateLossTime(draft.target, draft.actual);
 
     return {
       ...draft,
-      reject,
       good,
       lossTime,
       lossTimeBreakdown:
         Number(lossTime) > 0 ? draft.lossTimeBreakdown : [createLossTimeRow()],
+      rejectBreakdown:
+        Number(draft.reject || 0) > 0 ? draft.rejectBreakdown : [createRejectRow()],
     };
   };
 
+  const getSelectedRejectReasons = (breakdown, currentRowId) =>
+    breakdown
+      .filter((item) => item.id !== currentRowId)
+      .map((item) => item.reason)
+      .filter(Boolean);
+
+  const getAvailableRejectReasons = (breakdown, currentRowId) => {
+    const usedReasons = new Set(getSelectedRejectReasons(breakdown, currentRowId));
+    return rejectReasonOptions.filter((reason) => !usedReasons.has(reason));
+  };
+
+  const getFieldClassName = (error, readOnly = false) =>
+    `field ${readOnly ? "field-readonly" : ""} ${error ? "field-error" : ""}`;
+
   const handleChange = (e) => {
-    const { name, value, type, checked } = e.target;
+    const { name, value } = e.target;
 
     if (name === "hall") {
       setForm((prev) =>
@@ -317,7 +421,7 @@ export default function ProductionEntryForm() {
       return;
     }
 
-    if (name === "target" || name === "actual") {
+    if (name === "target" || name === "actual" || name === "reject") {
       setForm((prev) =>
         syncDerivedValues({
           ...prev,
@@ -329,25 +433,41 @@ export default function ProductionEntryForm() {
 
     setForm((prev) => ({
       ...prev,
-      [name]: type === "checkbox" ? checked : value,
+      [name]: value,
     }));
   };
 
-  const handleRejectQtyChange = (reason, value) => {
-    const cleanValue = value === "" ? "" : Math.max(0, Number(value));
+  const handleRejectRowChange = (rowId, field, value) => {
+    setForm((prev) => ({
+      ...prev,
+      rejectBreakdown: prev.rejectBreakdown.map((item) => {
+        if (item.id !== rowId) return item;
 
-    setForm((prev) => {
-      const updatedBreakdown = prev.rejectBreakdown.map((item) =>
-        item.reason === reason
-          ? { ...item, qty: cleanValue === "" ? "" : String(cleanValue) }
-          : item
-      );
+        if (field === "qty") {
+          const cleanValue = value === "" ? "" : String(Math.max(0, Number(value)));
+          return { ...item, qty: cleanValue };
+        }
 
-      return syncDerivedValues({
-        ...prev,
-        rejectBreakdown: updatedBreakdown,
-      });
-    });
+        return { ...item, [field]: value };
+      }),
+    }));
+  };
+
+  const addRejectRow = () => {
+    setForm((prev) => ({
+      ...prev,
+      rejectBreakdown: [...prev.rejectBreakdown, createRejectRow()],
+    }));
+  };
+
+  const removeRejectRow = (rowId) => {
+    setForm((prev) => ({
+      ...prev,
+      rejectBreakdown:
+        prev.rejectBreakdown.length === 1
+          ? [createRejectRow()]
+          : prev.rejectBreakdown.filter((item) => item.id !== rowId),
+    }));
   };
 
   const handleLossTimeRowChange = (index, field, value) => {
@@ -413,16 +533,16 @@ export default function ProductionEntryForm() {
 
     const actual = Number(form.actual || 0);
     const target = Number(form.target || 0);
-    const reject = getRejectBreakdownTotal(form.rejectBreakdown);
+    const reject = Number(form.reject || 0);
     const good = Math.max(actual - reject, 0);
     const lossTime = Math.max(target - actual, 0);
 
     const finalRejectBreakdown = form.rejectBreakdown
       .map((item) => ({
-        reason: item.reason,
+        reason: String(item.reason || "").trim(),
         qty: Number(item.qty || 0),
       }))
-      .filter((item) => item.qty > 0);
+      .filter((item) => item.reason || item.qty);
 
     const finalLossTimeBreakdown = form.lossTimeBreakdown
       .map((item) => {
@@ -443,72 +563,41 @@ export default function ProductionEntryForm() {
       (item) => String(item.id || "").toUpperCase() === normalizedOperatorId
     );
 
+    const hasBlockingErrors = Object.keys(validationErrors).length > 0;
+
     if (!form.shift) {
-      alert("Duration select karo, shift auto set ho jayegi.");
+      alert("Please select duration. Shift will be assigned automatically.");
       return;
     }
 
     if (!form.hall) {
-      alert("Hall select karna zaroori hai.");
+      alert("Please select production hall.");
       return;
     }
 
     if (!form.machineCode) {
-      alert("Machine select karna zaroori hai.");
+      alert("Please select machine.");
       return;
     }
 
     if (!form.part.trim()) {
-      alert("Part name dalna zaroori hai.");
+      alert("Please enter part description.");
       return;
     }
 
     if (!normalizedOperatorId) {
-      alert("Operator ID dalna zaroori hai.");
+      alert("Please enter operator ID.");
       return;
     }
 
     if (!normalizedOperatorName) {
-      alert("Operator name required hai.");
+      alert("Please enter operator name.");
       return;
     }
 
-    if (reject > actual) {
-      alert("Reject quantity actual production se zyada nahi ho sakti.");
+    if (hasBlockingErrors) {
+      alert("Please correct the highlighted validation errors before submitting.");
       return;
-    }
-
-    if (reject > 0 && finalRejectBreakdown.length === 0) {
-      alert("Reject breakdown fill karo.");
-      return;
-    }
-
-    if (lossTime > 0) {
-      if (!finalLossTimeBreakdown.length) {
-        alert("Loss time hai to uska breakdown fill karo.");
-        return;
-      }
-
-      const hasInvalidLossTimeRows = finalLossTimeBreakdown.some(
-        (item) => !item.reason || item.qty <= 0 || !item.person || !item.validPerson
-      );
-
-      if (hasInvalidLossTimeRows) {
-        alert("Loss time breakdown me valid reason, qty aur responsible person fill karo.");
-        return;
-      }
-
-      const totalLossTimeBreakdown = finalLossTimeBreakdown.reduce(
-        (sum, item) => sum + item.qty,
-        0
-      );
-
-      if (totalLossTimeBreakdown !== lossTime) {
-        alert(
-          `Loss time breakdown total ${totalLossTimeBreakdown} hai. Isse loss time ${lossTime} ke equal karo.`
-        );
-        return;
-      }
     }
 
     if (!existingOperator && normalizedOperatorId && normalizedOperatorName) {
@@ -533,7 +622,7 @@ export default function ProductionEntryForm() {
       machineCode: form.machineCode,
       machineName: form.machineName,
       machineDisplayName: form.machineDisplayName,
-      rejectBreakdown: finalRejectBreakdown,
+      rejectBreakdown: reject > 0 ? finalRejectBreakdown : [],
       lossTimeBreakdown: finalLossTimeBreakdown.map(({ validPerson, ...rest }) => rest),
       createdAt: new Date().toISOString(),
     };
@@ -546,7 +635,7 @@ export default function ProductionEntryForm() {
     const updatedEntries = [finalEntry, ...existingEntries];
     localStorage.setItem(STORAGE_KEYS.ENTRIES, JSON.stringify(updatedEntries));
 
-    alert("Production entry captured successfully");
+    alert("Production entry recorded successfully.");
     localStorage.removeItem(STORAGE_KEYS.FORM_DRAFT);
     setForm(getInitialFormState());
     navigate("/");
@@ -561,7 +650,22 @@ export default function ProductionEntryForm() {
 
       <div className="page-container">
         <header className="page-header">
+          <div className="header-left">
+            <h1 className="page-title">Production Entry Form</h1>
+            <p className="page-subtitle">
+              Record production, rejection and loss-time information with real-time validation.
+            </p>
+          </div>
+
           <div className="header-actions">
+            <button
+              type="button"
+              className="theme-toggle"
+              onClick={() => setTheme((prev) => (prev === "light" ? "dark" : "light"))}
+            >
+              {theme === "light" ? "Dark" : "Light"} Mode
+            </button>
+
             <Link to="/" className="back-link">
               Back to Dashboard
             </Link>
@@ -583,7 +687,7 @@ export default function ProductionEntryForm() {
               />
             </Field>
 
-            <Field label="Hall">
+            <Field label="Production Hall">
               <select
                 name="hall"
                 value={form.hall}
@@ -591,7 +695,7 @@ export default function ProductionEntryForm() {
                 className="field"
                 required
               >
-                <option value="">Select Hall</option>
+                <option value="">Select Production Hall</option>
                 {halls.map((hall) => (
                   <option key={hall} value={hall}>
                     {hall}
@@ -600,7 +704,7 @@ export default function ProductionEntryForm() {
               </select>
             </Field>
 
-            <Field label="Machine Name">
+            <Field label="Select Machine">
               <select
                 name="machine"
                 value={form.machine}
@@ -610,7 +714,7 @@ export default function ProductionEntryForm() {
                 disabled={!form.hall}
               >
                 <option value="">
-                  {form.hall ? "Select Machine" : "Select Hall First"}
+                  {form.hall ? "Select Machine" : "Select Production Hall First"}
                 </option>
                 {machineOptions.map((machine) => (
                   <option key={machine.code} value={machine.code}>
@@ -620,7 +724,7 @@ export default function ProductionEntryForm() {
               </select>
             </Field>
 
-            <Field label="Duration">
+            <Field label="Time Slot">
               <select
                 name="duration"
                 value={form.duration}
@@ -628,7 +732,7 @@ export default function ProductionEntryForm() {
                 className="field"
                 required
               >
-                <option value="">Select Duration</option>
+                <option value="">Select Time Slot</option>
                 {durationSlots.map((slot) => (
                   <option key={slot} value={slot}>
                     {slot}
@@ -641,19 +745,19 @@ export default function ProductionEntryForm() {
               <input
                 type="text"
                 name="shift"
-                value={form.shift || "Auto after duration select"}
-                className="field field-readonly"
+                value={form.shift || "Auto-assigned after time slot selection"}
+                className={getFieldClassName(false, true)}
                 readOnly
               />
             </Field>
 
-            <Field label="Part Name">
+            <Field label="Part Description">
               <input
                 type="text"
                 name="part"
                 value={form.part}
                 onChange={handleChange}
-                placeholder="Enter part name"
+                placeholder="Enter part description"
                 className="field"
                 required
               />
@@ -675,9 +779,7 @@ export default function ProductionEntryForm() {
               />
             </Field>
 
-            <Field
-              label={showNewOperatorNameField ? "New Operator Name" : "Operator Name"}
-            >
+            <Field label={showNewOperatorNameField ? "New Operator Name" : "Operator Name"}>
               <input
                 type="text"
                 name="operator"
@@ -685,131 +787,223 @@ export default function ProductionEntryForm() {
                 onChange={handleChange}
                 placeholder={
                   showNewOperatorNameField
-                    ? "New operator name enter karo"
-                    : "Auto fetched from operator ID"
+                    ? "Enter new operator name"
+                    : "Auto-fetched from operator ID"
                 }
-                className={`field ${showNewOperatorNameField ? "" : "field-readonly"}`}
+                className={getFieldClassName(false, !showNewOperatorNameField)}
                 readOnly={!showNewOperatorNameField}
                 required
               />
             </Field>
+          </div>
 
-            <Field label="Target Production">
+          <SectionTitle title="Production Metrics" />
+
+          <div className="form-grid">
+            <Field label="Target Quantity" error={validationErrors.target}>
               <input
                 type="number"
                 name="target"
                 value={form.target}
                 onChange={handleChange}
-                placeholder="Target qty"
-                className="field"
+                placeholder="Target quantity"
+                className={getFieldClassName(validationErrors.target)}
                 min="0"
               />
             </Field>
 
-            <Field label="Actual Production">
+            <Field label="Actual Quantity" error={validationErrors.actual}>
               <input
                 type="number"
                 name="actual"
                 value={form.actual}
                 onChange={handleChange}
-                placeholder="Actual qty"
-                className="field"
+                placeholder="Actual quantity"
+                className={getFieldClassName(validationErrors.actual)}
                 min="0"
                 required
               />
             </Field>
 
-            <Field label="Good Production">
-              <input
-                type="number"
-                name="good"
-                value={form.good}
-                className="field field-readonly"
-                readOnly
-                tabIndex={-1}
-              />
-            </Field>
-
-            <Field label="Reject Quantity">
+            <Field label="Rejected Quantity" error={validationErrors.reject}>
               <input
                 type="number"
                 name="reject"
                 value={form.reject}
-                className="field field-readonly reject-field"
+                onChange={handleChange}
+                placeholder="Rejected quantity"
+                className={getFieldClassName(validationErrors.reject)}
+                min="0"
+              />
+            </Field>
+
+            <Field label="Accepted Quantity">
+              <input
+                type="number"
+                name="good"
+                value={form.good}
+                className={getFieldClassName(false, true)}
                 readOnly
                 tabIndex={-1}
               />
             </Field>
 
-            <Field label="Loss Time">
+            <Field label="Production Loss Time">
               <input
                 type="number"
                 name="lossTime"
                 value={form.lossTime}
-                className="field field-readonly"
+                className={getFieldClassName(false, true)}
                 readOnly
                 tabIndex={-1}
               />
             </Field>
           </div>
 
-          <SectionTitle title="Reject Breakdown" />
+          <SectionTitle title="Rejection Breakdown" />
 
-          <div className="breakdown-card">
-            <div className="breakdown-head">
-              <div>
-                <h3 className="breakdown-title">Reason-wise Rejection Split</h3>
-                <p className="breakdown-subtitle">
-                  Reject reasons bharte hi reject aur good auto calculate honge.
+          {showRejectBreakdown ? (
+            <div className="breakdown-card">
+              <div className="breakdown-head">
+                <div>
+                  <h3 className="breakdown-title">Reason-wise Rejection Allocation</h3>
+                  <p className="breakdown-subtitle">
+                    Enter rejected quantity first, then allocate the quantity across rejection reasons.
+                  </p>
+                </div>
+
+                <div className="breakdown-stats">
+                  <div className="stat-chip">
+                    Rejected <strong>{rejectQty}</strong>
+                  </div>
+                  <div className="stat-chip">
+                    Allocated <strong>{rejectBreakdownTotal}</strong>
+                  </div>
+                  <div
+                    className={`stat-chip ${
+                      rejectDifference === 0 ? "ok-chip" : "error-chip"
+                    }`}
+                  >
+                    Difference <strong>{rejectDifference}</strong>
+                  </div>
+                </div>
+              </div>
+
+              {validationErrors.rejectBreakdown ? (
+                <p className="inline-error section-error">
+                  {validationErrors.rejectBreakdown}
                 </p>
+              ) : null}
+
+              <div className="selected-reject-chips">
+                {form.rejectBreakdown
+                  .filter((item) => item.reason && Number(item.qty || 0) > 0)
+                  .map((item) => (
+                    <div key={item.id} className="reason-chip">
+                      <span>{item.reason}</span>
+                      <strong>{item.qty}</strong>
+                    </div>
+                  ))}
               </div>
 
-              <div className="breakdown-stats">
-                <div className="stat-chip">
-                  Reject <strong>{rejectQty}</strong>
-                </div>
-                <div className="stat-chip">
-                  Breakdown <strong>{rejectBreakdownTotal}</strong>
-                </div>
-                <div
-                  className={`stat-chip ${
-                    rejectDifference === 0 ? "ok-chip" : "warn-chip"
-                  }`}
+              <div className="reject-rows">
+                {form.rejectBreakdown.map((item, index) => {
+                  const rowError = validationErrors[`rejectRow-${item.id}`];
+                  const availableReasons = getAvailableRejectReasons(
+                    form.rejectBreakdown,
+                    item.id
+                  );
+
+                  const options = [
+                    ...(item.reason ? [item.reason] : []),
+                    ...availableReasons,
+                  ].filter((value, idx, arr) => value && arr.indexOf(value) === idx);
+
+                  return (
+                    <div
+                      key={item.id}
+                      className={`reject-row ${rowError ? "row-error" : ""}`}
+                    >
+                      <Field label={`Rejection Reason ${index + 1}`}>
+                        <select
+                          value={item.reason}
+                          onChange={(e) =>
+                            handleRejectRowChange(item.id, "reason", e.target.value)
+                          }
+                          className={getFieldClassName(rowError)}
+                        >
+                          <option value="">Select rejection reason</option>
+                          {options.map((reason) => (
+                            <option key={reason} value={reason}>
+                              {reason}
+                            </option>
+                          ))}
+                        </select>
+                      </Field>
+
+                      <Field label="Quantity">
+                        <input
+                          type="number"
+                          min="0"
+                          value={item.qty}
+                          onChange={(e) =>
+                            handleRejectRowChange(item.id, "qty", e.target.value)
+                          }
+                          className={getFieldClassName(rowError)}
+                          placeholder="0"
+                        />
+                      </Field>
+
+                      <div className="field-wrap action-field">
+                        <label className="field-label">Action</label>
+                        <button
+                          type="button"
+                          className="secondary-btn danger-outline"
+                          onClick={() => removeRejectRow(item.id)}
+                          disabled={form.rejectBreakdown.length === 1}
+                        >
+                          Remove
+                        </button>
+                      </div>
+
+                      {rowError ? <p className="inline-error full-row">{rowError}</p> : null}
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="reject-actions">
+                <button
+                  type="button"
+                  className="secondary-btn small-btn"
+                  onClick={addRejectRow}
+                  disabled={
+                    form.rejectBreakdown.filter((item) => item.reason).length >=
+                    rejectReasonOptions.length
+                  }
                 >
-                  Difference <strong>{rejectDifference}</strong>
-                </div>
+                  + Add Rejection Reason
+                </button>
               </div>
             </div>
-
-            <div className="breakdown-grid">
-              {form.rejectBreakdown.map((item) => (
-                <div key={item.reason} className="breakdown-item">
-                  <label className="mini-label">{item.reason}</label>
-                  <input
-                    type="number"
-                    min="0"
-                    value={item.qty}
-                    onChange={(e) =>
-                      handleRejectQtyChange(item.reason, e.target.value)
-                    }
-                    className="field"
-                    placeholder="0"
-                  />
-                </div>
-              ))}
+          ) : (
+            <div className="breakdown-card compact-note">
+              <p className="breakdown-subtitle">
+                Rejection breakdown is not required when rejected quantity is zero.
+              </p>
             </div>
-          </div>
+          )}
 
           {showLossTimeFields && (
             <>
-              <SectionTitle title="Loss Time Responsibility" />
+              <SectionTitle title="Loss Time Breakdown" />
 
               <div className="responsibility-card">
                 <div className="responsibility-head">
                   <div>
-                    <h3 className="breakdown-title">Loss Time Breakdown</h3>
+                    <h3 className="breakdown-title">Loss Time Responsibility Allocation</h3>
                     <p className="breakdown-subtitle">
-                      Loss time ko multiple reasons aur responsible persons ke saath map karo.
+                      Map production loss time to valid reasons, quantities and responsible personnel.
                     </p>
                   </div>
 
@@ -818,11 +1012,11 @@ export default function ProductionEntryForm() {
                       Loss Time <strong>{lossTimeQty}</strong>
                     </div>
                     <div className="stat-chip">
-                      Breakdown <strong>{lossTimeBreakdownTotal}</strong>
+                      Allocated <strong>{lossTimeBreakdownTotal}</strong>
                     </div>
                     <div
                       className={`stat-chip ${
-                        lossTimeDifference === 0 ? "ok-chip" : "warn-chip"
+                        lossTimeDifference === 0 ? "ok-chip" : "error-chip"
                       }`}
                     >
                       Difference <strong>{lossTimeDifference}</strong>
@@ -838,22 +1032,32 @@ export default function ProductionEntryForm() {
                   </button>
                 </div>
 
+                {validationErrors.lossTimeBreakdown ? (
+                  <p className="inline-error section-error">
+                    {validationErrors.lossTimeBreakdown}
+                  </p>
+                ) : null}
+
                 <div className="responsibility-list">
                   {form.lossTimeBreakdown.map((item, index) => {
+                    const rowError = validationErrors[`lossRow-${index}`];
                     const suggestions = getResponsibilitySuggestions(item.person);
                     const datalistId = `loss-time-person-list-${index}`;
 
                     return (
-                      <div key={index} className="loss-row">
-                        <Field label="Reason">
+                      <div
+                        key={index}
+                        className={`loss-row ${rowError ? "row-error" : ""}`}
+                      >
+                        <Field label="Loss Reason">
                           <select
                             value={item.reason}
                             onChange={(e) =>
                               handleLossTimeRowChange(index, "reason", e.target.value)
                             }
-                            className="field"
+                            className={getFieldClassName(rowError)}
                           >
-                            <option value="">Select reason</option>
+                            <option value="">Select loss reason</option>
                             {lossTimeReasonOptions.map((reason) => (
                               <option key={reason} value={reason}>
                                 {reason}
@@ -862,7 +1066,7 @@ export default function ProductionEntryForm() {
                           </select>
                         </Field>
 
-                        <Field label="Qty">
+                        <Field label="Quantity">
                           <input
                             type="number"
                             min="0"
@@ -870,7 +1074,7 @@ export default function ProductionEntryForm() {
                             onChange={(e) =>
                               handleLossTimeRowChange(index, "qty", e.target.value)
                             }
-                            className="field"
+                            className={getFieldClassName(rowError)}
                             placeholder="0"
                           />
                         </Field>
@@ -882,8 +1086,8 @@ export default function ProductionEntryForm() {
                             onChange={(e) =>
                               handleLossTimeRowChange(index, "person", e.target.value)
                             }
-                            placeholder="Type person name"
-                            className="field"
+                            placeholder="Enter responsible person"
+                            className={getFieldClassName(rowError)}
                             list={datalistId}
                             autoComplete="off"
                           />
@@ -892,8 +1096,8 @@ export default function ProductionEntryForm() {
                         <Field label="Department">
                           <input
                             type="text"
-                            value={item.department || "Auto fetched"}
-                            className="field field-readonly"
+                            value={item.department || "Auto-assigned"}
+                            className={getFieldClassName(false, true)}
                             readOnly
                           />
                         </Field>
@@ -910,6 +1114,8 @@ export default function ProductionEntryForm() {
                           </button>
                         </div>
 
+                        {rowError ? <p className="inline-error full-row">{rowError}</p> : null}
+
                         <datalist id={datalistId}>
                           {suggestions.map((person) => (
                             <option key={person.name} value={person.name} />
@@ -923,7 +1129,7 @@ export default function ProductionEntryForm() {
             </>
           )}
 
-          <SectionTitle title="Remarks" />
+          <SectionTitle title="Operational Remarks" />
 
           <div className="form-grid single-grid">
             <Field label="Remarks">
@@ -932,7 +1138,7 @@ export default function ProductionEntryForm() {
                 value={form.remarks}
                 onChange={handleChange}
                 rows="5"
-                placeholder="Optional remarks"
+                placeholder="Enter operational remarks, if any"
                 className="field textarea-field"
               />
             </Field>
@@ -941,8 +1147,8 @@ export default function ProductionEntryForm() {
           <div className="summary-grid">
             <SummaryCard label="Target" value={form.target || 0} tone="purple" />
             <SummaryCard label="Actual" value={form.actual || 0} tone="blue" />
-            <SummaryCard label="Good" value={form.good || 0} tone="green" />
-            <SummaryCard label="Reject" value={form.reject || 0} tone="red" />
+            <SummaryCard label="Rejected" value={form.reject || 0} tone="red" />
+            <SummaryCard label="Accepted" value={form.good || 0} tone="green" />
             <SummaryCard label="Loss Time" value={form.lossTime || 0} tone="amber" />
           </div>
 
@@ -950,6 +1156,7 @@ export default function ProductionEntryForm() {
             <button type="submit" className="primary-btn">
               Save Entry
             </button>
+
             <button
               type="button"
               onClick={handleReset}
@@ -964,13 +1171,12 @@ export default function ProductionEntryForm() {
       <style>{`
         :root {
           --font-body: "Satoshi", Inter, ui-sans-serif, system-ui, sans-serif;
-          --font-display: "Satoshi", Inter, ui-sans-serif, system-ui, sans-serif;
           --bg: #f4f6f8;
           --bg-2: #eef2f6;
           --surface: #ffffff;
           --surface-soft: #f8fafc;
           --surface-readonly: #f1f5f9;
-          --border: #cfd8e3;
+          --border: #d4dce6;
           --border-strong: #94a3b8;
           --text: #223142;
           --text-soft: #66788a;
@@ -989,10 +1195,10 @@ export default function ProductionEntryForm() {
           --purple-soft: #f3e8ff;
           --amber: #b45309;
           --amber-soft: #fffbeb;
-          --shadow: 0 10px 24px rgba(15, 23, 42, 0.05);
-          --shadow-soft: 0 4px 12px rgba(15, 23, 42, 0.04);
-          --radius: 0px;
-          --radius-sm: 0px;
+          --shadow: 0 10px 30px rgba(15, 23, 42, 0.07);
+          --shadow-soft: 0 4px 14px rgba(15, 23, 42, 0.05);
+          --radius: 16px;
+          --radius-sm: 10px;
         }
 
         [data-theme="dark"] {
@@ -1039,11 +1245,11 @@ export default function ProductionEntryForm() {
 
         .page-shell {
           min-height: 100vh;
-          padding: 20px 12px 32px;
+          padding: 24px 12px 40px;
         }
 
         .page-container {
-          width: min(1160px, 100%);
+          width: min(1180px, 100%);
           margin: 0 auto;
         }
 
@@ -1053,7 +1259,22 @@ export default function ProductionEntryForm() {
           align-items: flex-start;
           gap: 20px;
           flex-wrap: wrap;
-          margin-bottom: 18px;
+          margin-bottom: 20px;
+        }
+
+        .page-title {
+          margin: 0;
+          font-size: clamp(1.7rem, 1.2rem + 1.4vw, 2.5rem);
+          color: var(--heading);
+          font-weight: 900;
+          letter-spacing: -0.04em;
+        }
+
+        .page-subtitle {
+          margin: 8px 0 0;
+          color: var(--text-soft);
+          font-size: 0.98rem;
+          line-height: 1.6;
         }
 
         .header-actions {
@@ -1062,8 +1283,17 @@ export default function ProductionEntryForm() {
           flex-wrap: wrap;
         }
 
-        .back-link {
+        .theme-toggle,
+        .back-link,
+        .primary-btn,
+        .secondary-btn {
           min-height: 44px;
+          border-radius: var(--radius-sm);
+          transition: 0.2s ease;
+        }
+
+        .theme-toggle,
+        .back-link {
           padding: 0 14px;
           border: 1px solid var(--border);
           background: var(--surface);
@@ -1075,9 +1305,9 @@ export default function ProductionEntryForm() {
           display: inline-flex;
           align-items: center;
           justify-content: center;
-          transition: 0.2s ease;
         }
 
+        .theme-toggle:hover,
         .back-link:hover {
           border-color: var(--border-strong);
           background: var(--surface-soft);
@@ -1086,17 +1316,22 @@ export default function ProductionEntryForm() {
         .form-card {
           background: var(--surface);
           border: 1px solid var(--border);
+          border-radius: var(--radius);
           box-shadow: var(--shadow);
-          padding: 16px;
+          padding: 20px;
         }
 
         .section-title {
-          margin: 18px 0 12px;
+          margin: 24px 0 12px;
           color: var(--heading);
           font-size: 0.92rem;
           font-weight: 900;
-          letter-spacing: 0.06em;
+          letter-spacing: 0.08em;
           text-transform: uppercase;
+        }
+
+        .section-title:first-child {
+          margin-top: 0;
         }
 
         .form-grid {
@@ -1115,25 +1350,21 @@ export default function ProductionEntryForm() {
           gap: 6px;
         }
 
-        .field-label,
-        .mini-label {
+        .field-label {
           font-size: 0.88rem;
           font-weight: 800;
           color: var(--heading);
           line-height: 1.25;
         }
 
-        .mini-label {
-          font-size: 0.8rem;
-        }
-
         .field {
           width: 100%;
           min-height: 48px;
+          padding: 0.8rem 0.9rem;
           border: 1px solid var(--border);
+          border-radius: var(--radius-sm);
           background: var(--surface);
           color: var(--heading);
-          padding: 0.8rem 0.9rem;
           outline: none;
           font-size: 0.95rem;
           font-weight: 600;
@@ -1148,13 +1379,7 @@ export default function ProductionEntryForm() {
 
         .field:focus {
           border-color: var(--border-strong);
-          box-shadow: 0 0 0 2px rgba(148, 163, 184, 0.15);
-        }
-
-        .field:disabled {
-          opacity: 0.8;
-          cursor: not-allowed;
-          background: var(--surface-soft);
+          box-shadow: 0 0 0 3px rgba(148, 163, 184, 0.15);
         }
 
         .field-readonly {
@@ -1163,8 +1388,15 @@ export default function ProductionEntryForm() {
           font-weight: 700;
         }
 
-        .reject-field {
-          color: var(--danger);
+        .field-error {
+          border-color: var(--danger) !important;
+          background: color-mix(in srgb, var(--danger-soft) 35%, var(--surface) 65%);
+          box-shadow: 0 0 0 3px rgba(180, 35, 24, 0.14) !important;
+        }
+
+        .field-error:focus {
+          border-color: var(--danger) !important;
+          box-shadow: 0 0 0 3px rgba(180, 35, 24, 0.18) !important;
         }
 
         .textarea-field {
@@ -1173,21 +1405,33 @@ export default function ProductionEntryForm() {
           padding-top: 12px;
         }
 
-        select.field option {
-          background: #ffffff;
-          color: #0f172a;
+        .inline-error {
+          margin: 4px 0 0;
+          color: var(--danger);
+          font-size: 0.78rem;
+          font-weight: 700;
+          line-height: 1.4;
         }
 
-        .responsibility-card,
-        .breakdown-card {
-          margin-top: 2px;
+        .section-error {
+          margin-top: 10px;
+          margin-bottom: 2px;
+        }
+
+        .field-wrap:has(.field-error) .field-label {
+          color: var(--danger);
+        }
+
+        .breakdown-card,
+        .responsibility-card {
           border: 1px solid var(--border);
+          border-radius: var(--radius);
           background: var(--surface-soft);
           padding: 14px;
         }
 
-        .responsibility-head,
-        .breakdown-head {
+        .breakdown-head,
+        .responsibility-head {
           display: flex;
           justify-content: space-between;
           align-items: flex-start;
@@ -1196,30 +1440,10 @@ export default function ProductionEntryForm() {
           margin-bottom: 14px;
         }
 
-        .responsibility-list {
-          display: flex;
-          flex-direction: column;
-          gap: 12px;
-        }
-
-        .loss-row {
-          display: grid;
-          grid-template-columns: 1.2fr 0.7fr 1.1fr 1fr 140px;
-          gap: 12px;
-          align-items: end;
-          padding: 12px;
-          border: 1px solid var(--border);
-          background: var(--surface);
-        }
-
-        .action-field {
-          justify-content: flex-end;
-        }
-
         .breakdown-title {
           margin: 0;
           color: var(--heading);
-          font-size: 0.98rem;
+          font-size: 1rem;
           font-weight: 900;
         }
 
@@ -1240,6 +1464,7 @@ export default function ProductionEntryForm() {
           padding: 9px 11px;
           background: var(--surface);
           border: 1px solid var(--border);
+          border-radius: 999px;
           color: var(--heading);
           font-size: 0.82rem;
           font-weight: 700;
@@ -1250,21 +1475,86 @@ export default function ProductionEntryForm() {
           color: var(--success);
         }
 
-        .warn-chip {
-          background: var(--warning-soft);
-          color: var(--warning);
+        .error-chip {
+          background: var(--danger-soft);
+          color: var(--danger);
+          border-color: color-mix(in srgb, var(--danger) 35%, var(--border) 65%);
         }
 
-        .breakdown-grid {
-          display: grid;
-          grid-template-columns: repeat(4, minmax(0, 1fr));
+        .selected-reject-chips {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 8px;
+          margin-bottom: 12px;
+        }
+
+        .reason-chip {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          padding: 8px 12px;
+          border-radius: 999px;
+          border: 1px solid var(--border);
+          background: var(--surface);
+          color: var(--heading);
+          font-size: 0.84rem;
+          font-weight: 700;
+        }
+
+        .reason-chip strong {
+          color: var(--danger);
+        }
+
+        .reject-rows,
+        .responsibility-list {
+          display: flex;
+          flex-direction: column;
           gap: 12px;
         }
 
-        .breakdown-item {
+        .reject-row {
+          display: grid;
+          grid-template-columns: 1.4fr 0.8fr 130px;
+          gap: 12px;
+          align-items: end;
+          padding: 12px;
+          border: 1px solid var(--border);
+          border-radius: var(--radius-sm);
+          background: var(--surface);
+        }
+
+        .loss-row {
+          display: grid;
+          grid-template-columns: 1.5fr 0.7fr 1fr 1fr 140px;
+          gap: 12px;
+          align-items: end;
+          padding: 12px;
+          border: 1px solid var(--border);
+          border-radius: var(--radius-sm);
+          background: var(--surface);
+        }
+
+        .row-error {
+          border-color: color-mix(in srgb, var(--danger) 55%, var(--border) 45%) !important;
+          background: color-mix(in srgb, var(--danger-soft) 22%, var(--surface) 78%) !important;
+        }
+
+        .full-row {
+          grid-column: 1 / -1;
+        }
+
+        .action-field {
+          justify-content: flex-end;
+        }
+
+        .reject-actions {
+          margin-top: 12px;
           display: flex;
-          flex-direction: column;
-          gap: 6px;
+          justify-content: flex-start;
+        }
+
+        .compact-note {
+          padding: 16px;
         }
 
         .summary-grid {
@@ -1276,17 +1566,18 @@ export default function ProductionEntryForm() {
 
         .summary-card {
           border: 1px solid var(--border);
+          border-radius: var(--radius);
           background: var(--surface-soft);
           padding: 16px;
         }
 
         .summary-label {
-          font-size: 0.75rem;
-          text-transform: uppercase;
-          letter-spacing: 0.18em;
-          color: var(--text-soft);
-          font-weight: 800;
           margin-bottom: 8px;
+          color: var(--text-soft);
+          font-size: 0.75rem;
+          font-weight: 800;
+          letter-spacing: 0.18em;
+          text-transform: uppercase;
         }
 
         .summary-value {
@@ -1345,11 +1636,9 @@ export default function ProductionEntryForm() {
 
         .primary-btn,
         .secondary-btn {
-          min-height: 46px;
           padding: 0 18px;
           font-size: 0.94rem;
           font-weight: 800;
-          transition: 0.2s ease;
           border: 1px solid transparent;
         }
 
@@ -1396,8 +1685,7 @@ export default function ProductionEntryForm() {
             grid-template-columns: repeat(2, minmax(0, 1fr));
           }
 
-          .summary-grid,
-          .breakdown-grid {
+          .summary-grid {
             grid-template-columns: repeat(2, minmax(0, 1fr));
           }
 
@@ -1425,6 +1713,7 @@ export default function ProductionEntryForm() {
             grid-template-columns: 1fr;
           }
 
+          .theme-toggle,
           .back-link,
           .primary-btn,
           .secondary-btn {
@@ -1433,13 +1722,13 @@ export default function ProductionEntryForm() {
 
           .form-grid,
           .summary-grid,
-          .breakdown-grid,
-          .loss-row {
+          .loss-row,
+          .reject-row {
             grid-template-columns: 1fr;
           }
 
-          .responsibility-head,
-          .breakdown-head {
+          .breakdown-head,
+          .responsibility-head {
             flex-direction: column;
           }
         }
@@ -1452,11 +1741,12 @@ function SectionTitle({ title }) {
   return <div className="section-title">{title}</div>;
 }
 
-function Field({ label, children }) {
+function Field({ label, error, children }) {
   return (
     <div className="field-wrap">
       <label className="field-label">{label}</label>
       {children}
+      {error ? <p className="inline-error">{error}</p> : null}
     </div>
   );
 }
