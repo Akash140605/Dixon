@@ -11,26 +11,37 @@ const STORAGE_KEYS = {
 };
 
 const rejectReasonOptions = [
-  "Short Fill",
-  "Power Cut",
-  "Scratch",
-  "Dent",
-  "Black Dot",
-  "Flow Mark",
+  "Short Moulding",
+  "Silver Mark",
+  "Black Spot",
+  "Colour Change / Variation",
+  "Warpage",
+  "Flow Mark / Cut Mark",
+  "Shrinkage",
+  "Missing",
   "Burn Mark",
-  "Crack",
+  "Weld Line",
 ];
 
 const lossTimeReasonOptions = [
-  "Machine Breakdown",
-  "Mold Setting",
-  "Power Cut",
-  "No Material",
-  "Tool Issue",
-  "Operator Not Available",
-  "Planning Delay",
-  "Quality Hold",
-  "Maintenance Work",
+  "Breakdown - Machine Breakdown",
+  "Breakdown - Mould Breakdown",
+  "Breakdown - Process Trouble",
+  "Setup / Adjustment - Mould Change",
+  "Tool Change - Mould Polishing / Cleaning",
+  "Tool Change - Nozzle Change",
+  "Tool Change - Insert / Ejector Pin / Slider Pin / Spring / Coupler / Copper Electrode Change",
+  "Start-up Loss - Shift Start Delay",
+  "Minor Stoppages - Under 10 Min",
+  "Speed Loss - Unskilled Manpower / Actual Speed Low",
+  "Defect & Rework Loss",
+  "Schedule Down Time - Planned Stoppage",
+  "Management Loss - No Manpower",
+  "Management Loss - No Power",
+  "Management Loss - Raw Material Shortage",
+  "Management Loss - Conveyor Stop",
+  "Management Loss - Bin / Trolly Short",
+  "Operating Motion Loss",
   "Other",
 ];
 
@@ -176,14 +187,13 @@ const getStoredJson = (key, fallbackValue) => {
 const mergeDraftWithDefaults = (draft) => ({
   ...getInitialFormState(),
   ...draft,
-  machine:
-    typeof draft?.machine === "string" ? draft.machine : "",
-  machineCode:
-    typeof draft?.machineCode === "string" ? draft.machineCode : "",
-  machineName:
-    typeof draft?.machineName === "string" ? draft.machineName : "",
+  machine: typeof draft?.machine === "string" ? draft.machine : "",
+  machineCode: typeof draft?.machineCode === "string" ? draft.machineCode : "",
+  machineName: typeof draft?.machineName === "string" ? draft.machineName : "",
   machineDisplayName:
-    typeof draft?.machineDisplayName === "string" ? draft.machineDisplayName : "",
+    typeof draft?.machineDisplayName === "string"
+      ? draft.machineDisplayName
+      : "",
   rejectBreakdown:
     Array.isArray(draft?.rejectBreakdown) && draft.rejectBreakdown.length
       ? draft.rejectBreakdown
@@ -297,7 +307,7 @@ export default function ProductionEntryForm() {
     if (name === "operatorId") {
       const cleanValue = value.toUpperCase();
       const matchedOperator = operatorMaster.find(
-        (item) => item.id.toUpperCase() === cleanValue
+        (item) => String(item.id || "").toUpperCase() === cleanValue
       );
 
       setForm((prev) => ({
@@ -432,7 +442,7 @@ export default function ProductionEntryForm() {
     const normalizedOperatorId = form.operatorId.trim().toUpperCase();
     const normalizedOperatorName = form.operator.trim();
     const existingOperator = operatorMaster.find(
-      (item) => item.id.toUpperCase() === normalizedOperatorId
+      (item) => String(item.id || "").toUpperCase() === normalizedOperatorId
     );
 
     if (!form.shift) {
@@ -503,7 +513,7 @@ export default function ProductionEntryForm() {
       }
     }
 
-    if (!existingOperator) {
+    if (!existingOperator && normalizedOperatorId && normalizedOperatorName) {
       const newOperator = {
         id: normalizedOperatorId,
         name: normalizedOperatorName,
@@ -526,9 +536,7 @@ export default function ProductionEntryForm() {
       machineName: form.machineName,
       machineDisplayName: form.machineDisplayName,
       rejectBreakdown: finalRejectBreakdown,
-      lossTimeBreakdown: finalLossTimeBreakdown.map(
-        ({ validPerson, ...rest }) => rest
-      ),
+      lossTimeBreakdown: finalLossTimeBreakdown.map(({ validPerson, ...rest }) => rest),
       createdAt: new Date().toISOString(),
     };
 
@@ -555,7 +563,22 @@ export default function ProductionEntryForm() {
 
       <div className="page-container">
         <header className="page-header">
+          <div className="header-left">
+            <h1 className="page-title">Production Entry Form</h1>
+            <p className="page-subtitle">
+              Fill production, rejection and loss time details in one clean flow.
+            </p>
+          </div>
+
           <div className="header-actions">
+            <button
+              type="button"
+              className="theme-toggle"
+              onClick={() => setTheme((prev) => (prev === "light" ? "dark" : "light"))}
+            >
+              {theme === "light" ? "Dark" : "Light"} Mode
+            </button>
+
             <Link to="/" className="back-link">
               Back to Dashboard
             </Link>
@@ -687,7 +710,11 @@ export default function ProductionEntryForm() {
                 required
               />
             </Field>
+          </div>
 
+          <SectionTitle title="Production Metrics" />
+
+          <div className="form-grid">
             <Field label="Target Production">
               <input
                 type="number"
@@ -754,7 +781,7 @@ export default function ProductionEntryForm() {
               <div>
                 <h3 className="breakdown-title">Reason-wise Rejection Split</h3>
                 <p className="breakdown-subtitle">
-                  Reject reasons bharte hi reject aur good auto calculate honge.
+                  Reject breakdown fill karte hi reject aur good auto update honge.
                 </p>
               </div>
 
@@ -796,14 +823,14 @@ export default function ProductionEntryForm() {
 
           {showLossTimeFields && (
             <>
-              <SectionTitle title="Loss Time Responsibility" />
+              <SectionTitle title="Loss Time Breakdown" />
 
               <div className="responsibility-card">
                 <div className="responsibility-head">
                   <div>
-                    <h3 className="breakdown-title">Loss Time Breakdown</h3>
+                    <h3 className="breakdown-title">Loss Time with Responsibility</h3>
                     <p className="breakdown-subtitle">
-                      Loss time ko multiple reasons aur responsible persons ke saath map karo.
+                      Loss time ke saath exact reason, qty aur responsible person map karo.
                     </p>
                   </div>
 
@@ -944,6 +971,7 @@ export default function ProductionEntryForm() {
             <button type="submit" className="primary-btn">
               Save Entry
             </button>
+
             <button
               type="button"
               onClick={handleReset}
@@ -958,13 +986,12 @@ export default function ProductionEntryForm() {
       <style>{`
         :root {
           --font-body: "Satoshi", Inter, ui-sans-serif, system-ui, sans-serif;
-          --font-display: "Satoshi", Inter, ui-sans-serif, system-ui, sans-serif;
           --bg: #f4f6f8;
           --bg-2: #eef2f6;
           --surface: #ffffff;
           --surface-soft: #f8fafc;
           --surface-readonly: #f1f5f9;
-          --border: #cfd8e3;
+          --border: #d4dce6;
           --border-strong: #94a3b8;
           --text: #223142;
           --text-soft: #66788a;
@@ -983,10 +1010,10 @@ export default function ProductionEntryForm() {
           --purple-soft: #f3e8ff;
           --amber: #b45309;
           --amber-soft: #fffbeb;
-          --shadow: 0 10px 24px rgba(15, 23, 42, 0.05);
-          --shadow-soft: 0 4px 12px rgba(15, 23, 42, 0.04);
-          --radius: 0px;
-          --radius-sm: 0px;
+          --shadow: 0 10px 30px rgba(15, 23, 42, 0.07);
+          --shadow-soft: 0 4px 14px rgba(15, 23, 42, 0.05);
+          --radius: 16px;
+          --radius-sm: 10px;
         }
 
         [data-theme="dark"] {
@@ -1033,11 +1060,11 @@ export default function ProductionEntryForm() {
 
         .page-shell {
           min-height: 100vh;
-          padding: 20px 12px 32px;
+          padding: 24px 12px 40px;
         }
 
         .page-container {
-          width: min(1160px, 100%);
+          width: min(1180px, 100%);
           margin: 0 auto;
         }
 
@@ -1047,7 +1074,22 @@ export default function ProductionEntryForm() {
           align-items: flex-start;
           gap: 20px;
           flex-wrap: wrap;
-          margin-bottom: 18px;
+          margin-bottom: 20px;
+        }
+
+        .page-title {
+          margin: 0;
+          font-size: clamp(1.7rem, 1.2rem + 1.4vw, 2.5rem);
+          color: var(--heading);
+          font-weight: 900;
+          letter-spacing: -0.04em;
+        }
+
+        .page-subtitle {
+          margin: 8px 0 0;
+          color: var(--text-soft);
+          font-size: 0.98rem;
+          line-height: 1.6;
         }
 
         .header-actions {
@@ -1056,8 +1098,17 @@ export default function ProductionEntryForm() {
           flex-wrap: wrap;
         }
 
-        .back-link {
+        .theme-toggle,
+        .back-link,
+        .primary-btn,
+        .secondary-btn {
           min-height: 44px;
+          border-radius: var(--radius-sm);
+          transition: 0.2s ease;
+        }
+
+        .theme-toggle,
+        .back-link {
           padding: 0 14px;
           border: 1px solid var(--border);
           background: var(--surface);
@@ -1069,9 +1120,9 @@ export default function ProductionEntryForm() {
           display: inline-flex;
           align-items: center;
           justify-content: center;
-          transition: 0.2s ease;
         }
 
+        .theme-toggle:hover,
         .back-link:hover {
           border-color: var(--border-strong);
           background: var(--surface-soft);
@@ -1080,17 +1131,22 @@ export default function ProductionEntryForm() {
         .form-card {
           background: var(--surface);
           border: 1px solid var(--border);
+          border-radius: var(--radius);
           box-shadow: var(--shadow);
-          padding: 16px;
+          padding: 20px;
         }
 
         .section-title {
-          margin: 18px 0 12px;
+          margin: 24px 0 12px;
           color: var(--heading);
           font-size: 0.92rem;
           font-weight: 900;
-          letter-spacing: 0.06em;
+          letter-spacing: 0.08em;
           text-transform: uppercase;
+        }
+
+        .section-title:first-child {
+          margin-top: 0;
         }
 
         .form-grid {
@@ -1124,10 +1180,11 @@ export default function ProductionEntryForm() {
         .field {
           width: 100%;
           min-height: 48px;
+          padding: 0.8rem 0.9rem;
           border: 1px solid var(--border);
+          border-radius: var(--radius-sm);
           background: var(--surface);
           color: var(--heading);
-          padding: 0.8rem 0.9rem;
           outline: none;
           font-size: 0.95rem;
           font-weight: 600;
@@ -1142,7 +1199,7 @@ export default function ProductionEntryForm() {
 
         .field:focus {
           border-color: var(--border-strong);
-          box-shadow: 0 0 0 2px rgba(148, 163, 184, 0.15);
+          box-shadow: 0 0 0 3px rgba(148, 163, 184, 0.15);
         }
 
         .field:disabled {
@@ -1167,21 +1224,16 @@ export default function ProductionEntryForm() {
           padding-top: 12px;
         }
 
-        select.field option {
-          background: #ffffff;
-          color: #0f172a;
-        }
-
-        .responsibility-card,
-        .breakdown-card {
-          margin-top: 2px;
+        .breakdown-card,
+        .responsibility-card {
           border: 1px solid var(--border);
+          border-radius: var(--radius);
           background: var(--surface-soft);
           padding: 14px;
         }
 
-        .responsibility-head,
-        .breakdown-head {
+        .breakdown-head,
+        .responsibility-head {
           display: flex;
           justify-content: space-between;
           align-items: flex-start;
@@ -1190,30 +1242,10 @@ export default function ProductionEntryForm() {
           margin-bottom: 14px;
         }
 
-        .responsibility-list {
-          display: flex;
-          flex-direction: column;
-          gap: 12px;
-        }
-
-        .loss-row {
-          display: grid;
-          grid-template-columns: 1.2fr 0.7fr 1.1fr 1fr 140px;
-          gap: 12px;
-          align-items: end;
-          padding: 12px;
-          border: 1px solid var(--border);
-          background: var(--surface);
-        }
-
-        .action-field {
-          justify-content: flex-end;
-        }
-
         .breakdown-title {
           margin: 0;
           color: var(--heading);
-          font-size: 0.98rem;
+          font-size: 1rem;
           font-weight: 900;
         }
 
@@ -1234,6 +1266,7 @@ export default function ProductionEntryForm() {
           padding: 9px 11px;
           background: var(--surface);
           border: 1px solid var(--border);
+          border-radius: 999px;
           color: var(--heading);
           font-size: 0.82rem;
           font-weight: 700;
@@ -1255,10 +1288,26 @@ export default function ProductionEntryForm() {
           gap: 12px;
         }
 
-        .breakdown-item {
+        .breakdown-item,
+        .responsibility-list {
           display: flex;
           flex-direction: column;
-          gap: 6px;
+          gap: 12px;
+        }
+
+        .loss-row {
+          display: grid;
+          grid-template-columns: 1.5fr 0.7fr 1fr 1fr 140px;
+          gap: 12px;
+          align-items: end;
+          padding: 12px;
+          border: 1px solid var(--border);
+          border-radius: var(--radius-sm);
+          background: var(--surface);
+        }
+
+        .action-field {
+          justify-content: flex-end;
         }
 
         .summary-grid {
@@ -1270,17 +1319,18 @@ export default function ProductionEntryForm() {
 
         .summary-card {
           border: 1px solid var(--border);
+          border-radius: var(--radius);
           background: var(--surface-soft);
           padding: 16px;
         }
 
         .summary-label {
-          font-size: 0.75rem;
-          text-transform: uppercase;
-          letter-spacing: 0.18em;
-          color: var(--text-soft);
-          font-weight: 800;
           margin-bottom: 8px;
+          color: var(--text-soft);
+          font-size: 0.75rem;
+          font-weight: 800;
+          letter-spacing: 0.18em;
+          text-transform: uppercase;
         }
 
         .summary-value {
@@ -1293,7 +1343,6 @@ export default function ProductionEntryForm() {
         .summary-card.blue {
           background: var(--info-soft);
         }
-
         .summary-card.blue .summary-value {
           color: var(--info);
         }
@@ -1301,7 +1350,6 @@ export default function ProductionEntryForm() {
         .summary-card.green {
           background: #ecfdf5;
         }
-
         .summary-card.green .summary-value {
           color: #15803d;
         }
@@ -1309,7 +1357,6 @@ export default function ProductionEntryForm() {
         .summary-card.red {
           background: #fff1f2;
         }
-
         .summary-card.red .summary-value {
           color: #be123c;
         }
@@ -1317,7 +1364,6 @@ export default function ProductionEntryForm() {
         .summary-card.purple {
           background: var(--purple-soft);
         }
-
         .summary-card.purple .summary-value {
           color: var(--purple);
         }
@@ -1325,7 +1371,6 @@ export default function ProductionEntryForm() {
         .summary-card.amber {
           background: var(--amber-soft);
         }
-
         .summary-card.amber .summary-value {
           color: var(--amber);
         }
@@ -1339,11 +1384,9 @@ export default function ProductionEntryForm() {
 
         .primary-btn,
         .secondary-btn {
-          min-height: 46px;
           padding: 0 18px;
           font-size: 0.94rem;
           font-weight: 800;
-          transition: 0.2s ease;
           border: 1px solid transparent;
         }
 
@@ -1419,6 +1462,7 @@ export default function ProductionEntryForm() {
             grid-template-columns: 1fr;
           }
 
+          .theme-toggle,
           .back-link,
           .primary-btn,
           .secondary-btn {
@@ -1432,8 +1476,8 @@ export default function ProductionEntryForm() {
             grid-template-columns: 1fr;
           }
 
-          .responsibility-head,
-          .breakdown-head {
+          .breakdown-head,
+          .responsibility-head {
             flex-direction: column;
           }
         }
