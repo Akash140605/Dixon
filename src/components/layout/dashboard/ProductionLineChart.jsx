@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useState } from "react";
 import {
   ResponsiveContainer,
   LineChart,
@@ -24,6 +24,20 @@ function formatShortDate(value) {
   });
 }
 
+function formatMonthLabel(value) {
+  if (!value) return "-";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return String(value);
+  return parsed.toLocaleDateString("en-IN", {
+    month: "short",
+    year: "2-digit",
+  });
+}
+
+function getWeekLabel(startDate, endDate) {
+  return `${formatShortDate(startDate)} - ${formatShortDate(endDate)}`;
+}
+
 function getThemeTokens(theme = "light") {
   if (theme === "dark") {
     return {
@@ -44,6 +58,8 @@ function getThemeTokens(theme = "light") {
       lossTime: "#a78bfa",
       legend: "border-slate-700 bg-slate-900 text-slate-300",
       stat: "border-slate-800 bg-slate-900",
+      activeTab: "bg-slate-100 text-slate-900 border-slate-100",
+      tab: "bg-slate-900 text-slate-300 border-slate-700",
     };
   }
 
@@ -65,6 +81,8 @@ function getThemeTokens(theme = "light") {
     lossTime: "#7c3aed",
     legend: "border-slate-300 bg-slate-50 text-slate-700",
     stat: "border-slate-200 bg-slate-50",
+    activeTab: "bg-slate-900 text-white border-slate-900",
+    tab: "bg-white text-slate-700 border-slate-300",
   };
 }
 
@@ -78,6 +96,72 @@ function normalizeChartRow(row = {}) {
     target: Number(row.target ?? 0),
     lossTime: Number(row.lossTime ?? 0),
   };
+}
+
+function sortByDate(rows = []) {
+  return [...rows].sort((a, b) => {
+    const da = new Date(a.date).getTime();
+    const db = new Date(b.date).getTime();
+    return da - db;
+  });
+}
+
+function aggregateChunk(rows, label) {
+  return {
+    label,
+    date: rows[0]?.date || "",
+    actual: rows.reduce((sum, row) => sum + Number(row.actual || 0), 0),
+    good: rows.reduce((sum, row) => sum + Number(row.good || 0), 0),
+    reject: rows.reduce((sum, row) => sum + Number(row.reject || 0), 0),
+    target: rows.reduce((sum, row) => sum + Number(row.target || 0), 0),
+    lossTime: rows.reduce((sum, row) => sum + Number(row.lossTime || 0), 0),
+  };
+}
+
+function groupByChunkSize(rows, size) {
+  const output = [];
+  for (let i = 0; i < rows.length; i += size) {
+    const chunk = rows.slice(i, i + size);
+    const start = chunk[0]?.date;
+    const end = chunk[chunk.length - 1]?.date;
+    output.push(
+      aggregateChunk(
+        chunk,
+        start === end ? formatShortDate(start) : `${formatShortDate(start)} - ${formatShortDate(end)}`
+      )
+    );
+  }
+  return output;
+}
+
+function groupWeekly(rows) {
+  const buckets = [];
+  for (let i = 0; i < rows.length; i += 7) {
+    const chunk = rows.slice(i, i + 7);
+    const start = chunk[0]?.date;
+    const end = chunk[chunk.length - 1]?.date;
+    buckets.push(aggregateChunk(chunk, getWeekLabel(start, end)));
+  }
+  return buckets;
+}
+
+function groupMonthly(rows) {
+  const map = new Map();
+
+  rows.forEach((row) => {
+    const date = new Date(row.date);
+    if (Number.isNaN(date.getTime())) return;
+
+    const key = `${date.getFullYear()}-${date.getMonth()}`;
+    if (!map.has(key)) {
+      map.set(key, []);
+    }
+    map.get(key).push(row);
+  });
+
+  return Array.from(map.values()).map((chunk) =>
+    aggregateChunk(chunk, formatMonthLabel(chunk[0]?.date))
+  );
 }
 
 function StatCard({ label, value, color, theme = "light" }) {
@@ -110,7 +194,7 @@ function CustomTooltip({ active, payload, label, theme = "light" }) {
       }}
     >
       <p className={`text-[11px] font-bold uppercase tracking-[0.18em] ${t.muted}`}>
-        Production Date
+        Period
       </p>
       <p className={`mt-1 text-sm font-bold ${t.title}`}>{label}</p>
 
@@ -121,28 +205,24 @@ function CustomTooltip({ active, payload, label, theme = "light" }) {
             {formatNumber(row.actual)}
           </span>
         </div>
-
         <div className="flex items-center justify-between gap-4">
           <span className={t.muted}>Good</span>
           <span className="font-bold tabular-nums" style={{ color: t.good }}>
             {formatNumber(row.good)}
           </span>
         </div>
-
         <div className="flex items-center justify-between gap-4">
           <span className={t.muted}>Reject</span>
           <span className="font-bold tabular-nums" style={{ color: t.reject }}>
             {formatNumber(row.reject)}
           </span>
         </div>
-
         <div className="flex items-center justify-between gap-4">
           <span className={t.muted}>Target</span>
           <span className="font-bold tabular-nums" style={{ color: t.target }}>
             {formatNumber(row.target)}
           </span>
         </div>
-
         <div className="flex items-center justify-between gap-4">
           <span className={t.muted}>Loss Time</span>
           <span className="font-bold tabular-nums" style={{ color: t.lossTime }}>
@@ -170,22 +250,45 @@ function CustomLegend({ payload, theme = "light" }) {
             className="h-2.5 w-2.5 shrink-0 rounded-full"
             style={{ backgroundColor: entry.color }}
           />
-          <span className="text-xs font-semibold">
-            {entry.value}
-          </span>
+          <span className="text-xs font-semibold">{entry.value}</span>
         </div>
       ))}
     </div>
   );
 }
 
-export default function ProductionLineChart({ data = [], theme = "light" }) {
-  const t = getThemeTokens(theme);
+const RANGE_OPTIONS = [
+  { key: "daily", label: "Daily" },
+  { key: "3day", label: "3 Day" },
+  { key: "5day", label: "5 Day" },
+  { key: "weekly", label: "Weekly" },
+  { key: "monthly", label: "Monthly" },
+];
 
-  const chartData = useMemo(
-    () => (Array.isArray(data) ? data.map(normalizeChartRow) : []),
-    [data]
-  );
+export default function ProductionLineChart({
+  data = [],
+  theme = "light",
+  title = "Day Wise Production Trend",
+  ignoreFilters = true,
+}) {
+  const t = getThemeTokens(theme);
+  const [range, setRange] = useState("daily");
+
+  const baseData = useMemo(() => {
+    const normalized = Array.isArray(data) ? data.map(normalizeChartRow) : [];
+    return sortByDate(normalized);
+  }, [data]);
+
+  const chartData = useMemo(() => {
+    if (range === "3day") return groupByChunkSize(baseData, 3);
+    if (range === "5day") return groupByChunkSize(baseData, 5);
+    if (range === "weekly") return groupWeekly(baseData);
+    if (range === "monthly") return groupMonthly(baseData);
+    return baseData.map((row) => ({
+      ...row,
+      label: formatShortDate(row.date),
+    }));
+  }, [baseData, range]);
 
   const totals = useMemo(() => {
     return chartData.reduce(
@@ -206,13 +309,38 @@ export default function ProductionLineChart({ data = [], theme = "light" }) {
 
   return (
     <section className={`border p-5 ${t.sectionBg} ${t.border}`}>
-      <div className="mb-4 border-b pb-3 border-inherit">
-        <h3 className={`text-lg font-bold tracking-tight ${t.title}`}>
-          Day Wise Production Trend
-        </h3>
-        <p className={`mt-1 text-sm ${t.text}`}>
-          Daily actual, good, reject, target aur loss time trend overview.
-        </p>
+      <div className="mb-4 flex flex-col gap-4 border-b pb-3 border-inherit">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <h3 className={`text-lg font-bold tracking-tight ${t.title}`}>
+              {title}
+            </h3>
+            <p className={`mt-1 text-sm ${t.text}`}>
+              Daily, grouped multi-day, weekly aur monthly production trend overview.
+            </p>
+          </div>
+
+          {ignoreFilters ? (
+            <div className={`border px-3 py-2 text-xs font-semibold ${t.legend}`}>
+              Full trend view, filter independent
+            </div>
+          ) : null}
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          {RANGE_OPTIONS.map((option) => (
+            <button
+              key={option.key}
+              type="button"
+              onClick={() => setRange(option.key)}
+              className={`border px-3 py-2 text-xs font-bold uppercase tracking-[0.14em] transition ${
+                range === option.key ? t.activeTab : t.tab
+              }`}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {chartData.length > 0 ? (
@@ -226,20 +354,13 @@ export default function ProductionLineChart({ data = [], theme = "light" }) {
             <StatCard label="Reject %" value={rejectPercent} color={t.reject} theme={theme} />
           </div>
 
-          <div className={`h-[340px] w-full border p-3 ${t.panelBg} ${t.border}`}>
+          <div className={`h-[360px] w-full border p-3 ${t.panelBg} ${t.border}`}>
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart
-                data={chartData}
-                margin={{ top: 10, right: 10, left: -10, bottom: 10 }}
-              >
-                <CartesianGrid
-                  strokeDasharray="2 2"
-                  stroke={t.grid}
-                />
+              <LineChart data={chartData} margin={{ top: 10, right: 10, left: -10, bottom: 10 }}>
+                <CartesianGrid strokeDasharray="2 2" stroke={t.grid} />
 
                 <XAxis
-                  dataKey="date"
-                  tickFormatter={formatShortDate}
+                  dataKey="label"
                   stroke={t.axis}
                   tick={{ fill: t.axis, fontSize: 12 }}
                   axisLine={{ stroke: t.grid }}
@@ -247,7 +368,7 @@ export default function ProductionLineChart({ data = [], theme = "light" }) {
                   interval={0}
                   angle={chartData.length > 7 ? -20 : 0}
                   textAnchor={chartData.length > 7 ? "end" : "middle"}
-                  height={chartData.length > 7 ? 50 : 30}
+                  height={chartData.length > 7 ? 52 : 30}
                 />
 
                 <YAxis
@@ -315,7 +436,7 @@ export default function ProductionLineChart({ data = [], theme = "light" }) {
 
           <div className={`mt-4 border px-4 py-3 ${t.softBg} ${t.border}`}>
             <p className={`text-sm leading-7 ${t.text}`}>
-              <span className="font-bold">Chart reading:</span> actual aur good lines se output consistency samajh aati hai, reject line quality variation ko highlight karti hai, target line benchmark dikhati hai, aur loss time line downtime impact ko clearly expose karti hai.
+              <span className="font-bold">Chart reading:</span> range switcher se tum daily noise aur grouped trend dono compare kar sakte ho; weekly aur monthly view long-term pattern samajhne ke liye zyada clean hota hai.
             </p>
           </div>
         </>
@@ -326,7 +447,7 @@ export default function ProductionLineChart({ data = [], theme = "light" }) {
               No production trend data available
             </p>
             <p className={`mt-1 text-xs ${t.muted}`}>
-              Data add hone par line chart yahan show hoga.
+              Data add hone par trend chart yahan show hoga.
             </p>
           </div>
         </div>

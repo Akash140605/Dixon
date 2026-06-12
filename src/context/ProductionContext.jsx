@@ -59,6 +59,7 @@ function formatDisplayDate(dateString) {
   if (!dateString) return "";
 
   const date = new Date(dateString);
+
   if (Number.isNaN(date.getTime())) return "";
 
   return date.toLocaleDateString("en-GB", {
@@ -76,19 +77,6 @@ function normalizeRejectBreakdown(breakdown = []) {
       qty: Number(item?.qty || 0),
     }))
     .filter((item) => item.reason && item.qty > 0);
-}
-
-function normalizeLossTimeBreakdown(breakdown = []) {
-  if (!Array.isArray(breakdown)) return [];
-
-  return breakdown
-    .map((item) => ({
-      reason: item?.reason || "",
-      qty: Number(item?.qty || 0),
-      person: item?.person || item?.name || "",
-      department: item?.department || "",
-    }))
-    .filter((item) => item.reason || item.qty > 0 || item.person);
 }
 
 function normalizeResponsibilities(responsibilities = []) {
@@ -120,24 +108,6 @@ function buildResponsibilitiesText(responsibilities = []) {
     .join(", ");
 }
 
-function buildLossTimeBreakdownText(lossTimeBreakdown = []) {
-  if (!Array.isArray(lossTimeBreakdown) || lossTimeBreakdown.length === 0) return "";
-
-  return lossTimeBreakdown
-    .map((item) => {
-      const reasonText = item.reason || "Unknown Reason";
-      const qtyText = Number(item.qty || 0);
-      const personText = item.person
-        ? item.department
-          ? ` - ${item.person} (${item.department})`
-          : ` - ${item.person}`
-        : "";
-
-      return `${reasonText}: ${qtyText}${personText}`;
-    })
-    .join(", ");
-}
-
 function getMachineDisplay(row = {}) {
   if (typeof row.machine === "string" && row.machine.trim()) return row.machine;
   if (row.machine?.displayName) return row.machine.displayName;
@@ -148,22 +118,7 @@ function getMachineDisplay(row = {}) {
 
 function normalizeHourlyRow(row = {}) {
   const normalizedBreakdown = normalizeRejectBreakdown(row.rejectBreakdown);
-
-  const normalizedLossTimeBreakdown = normalizeLossTimeBreakdown(
-    row.lossTimeBreakdown || []
-  );
-
-  const fallbackResponsibilities = normalizeResponsibilities(row.responsibilities);
-
-  const normalizedResponsibilities =
-    normalizedLossTimeBreakdown.length > 0
-      ? normalizedLossTimeBreakdown
-          .map((item) => ({
-            person: item.person || "",
-            department: item.department || "",
-          }))
-          .filter((item) => item.person)
-      : fallbackResponsibilities;
+  const normalizedResponsibilities = normalizeResponsibilities(row.responsibilities);
 
   return {
     ...row,
@@ -179,17 +134,13 @@ function normalizeHourlyRow(row = {}) {
     good: Number(row.good || 0),
     reject: Number(row.reject || 0),
     target: Number(row.target || 0),
-    lossTime: Number(
-      row.lossTime || Math.max(Number(row.target || 0) - Number(row.actual || 0), 0)
-    ),
+    lossTime: Number(row.lossTime || Math.max(Number(row.target || 0) - Number(row.actual || 0), 0)),
     rejectReason: row.rejectReason || "",
     rejectBreakdown: normalizedBreakdown,
     rejectBreakdownText: buildRejectReasonText(
       normalizedBreakdown,
       row.rejectReason || ""
     ),
-    lossTimeBreakdown: normalizedLossTimeBreakdown,
-    lossTimeBreakdownText: buildLossTimeBreakdownText(normalizedLossTimeBreakdown),
     responsibilities: normalizedResponsibilities,
     responsibilitiesText: buildResponsibilitiesText(normalizedResponsibilities),
     remarks: row.remarks || "",
@@ -247,6 +198,7 @@ function buildDayWiseTrend(hourlyTable) {
 
   hourlyTable.forEach((row) => {
     const shortDate = formatDisplayDate(row.date);
+
     if (!shortDate) return;
 
     if (!dayWiseMap.has(shortDate)) {
@@ -361,8 +313,6 @@ function buildMachineHourlyTrend(hourlyTable) {
       rejectReason: row.rejectReason || "",
       rejectBreakdown: row.rejectBreakdown || [],
       rejectBreakdownText: row.rejectBreakdownText || "",
-      lossTimeBreakdown: row.lossTimeBreakdown || [],
-      lossTimeBreakdownText: row.lossTimeBreakdownText || "",
       responsibilities: row.responsibilities || [],
       responsibilitiesText: row.responsibilitiesText || "",
       remarks: row.remarks || "",
@@ -509,28 +459,18 @@ export function ProductionProvider({ children }) {
       const good = Number(entry.good || 0);
       const reject = Number(entry.reject || 0);
       const target = Number(entry.target || 0);
-      const lossTime = Number(entry.lossTime || Math.max(target - actual, 0));
+      const lossTime = Number(
+        entry.lossTime || Math.max(target - actual, 0)
+      );
 
       const normalizedShift = normalizeShift(entry.shift);
       const compactShift = normalizedShift.replace("Shift ", "");
-
       const normalizedBreakdown = normalizeRejectBreakdown(
         entry.rejectBreakdown || []
       );
-
-      const normalizedLossTimeBreakdown = normalizeLossTimeBreakdown(
-        entry.lossTimeBreakdown || []
+      const normalizedResponsibilities = normalizeResponsibilities(
+        entry.responsibilities || []
       );
-
-      const normalizedResponsibilities =
-        normalizedLossTimeBreakdown.length > 0
-          ? normalizedLossTimeBreakdown
-              .map((item) => ({
-                person: item.person || "",
-                department: item.department || "",
-              }))
-              .filter((item) => item.person)
-          : normalizeResponsibilities(entry.responsibilities || []);
 
       const newHourlyEntry = normalizeHourlyRow({
         id: entry.id || createEntryId(),
@@ -554,7 +494,6 @@ export function ProductionProvider({ children }) {
         isNewOperator: Boolean(entry.isNewOperator),
         rejectReason: normalizedBreakdown[0]?.reason || entry.rejectReason || "",
         rejectBreakdown: normalizedBreakdown,
-        lossTimeBreakdown: normalizedLossTimeBreakdown,
         responsibilities: normalizedResponsibilities,
         remarks: entry.remarks || "",
         createdAt: entry.createdAt || new Date().toISOString(),
