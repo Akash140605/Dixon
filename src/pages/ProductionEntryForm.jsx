@@ -410,10 +410,9 @@ export default function ProductionEntryForm() {
     localStorage.removeItem(STORAGE_KEYS.FORM_DRAFT);
   };
 
- const handleSubmit = async (e) => {
-  e.preventDefault();
+  const handleSubmit = (e) => {
+    e.preventDefault();
 
-  try {
     const actual = Number(form.actual || 0);
     const target = Number(form.target || 0);
     const reject = getRejectBreakdownTotal(form.rejectBreakdown);
@@ -438,13 +437,12 @@ export default function ProductionEntryForm() {
           validPerson: Boolean(matchedPerson),
         };
       })
-      .filter((item) => item.reason && item.qty > 0 && item.person);
+      .filter((item) => item.reason || item.qty || item.person);
 
     const normalizedOperatorId = form.operatorId.trim().toUpperCase();
     const normalizedOperatorName = form.operator.trim();
-
     const existingOperator = operatorMaster.find(
-      (item) => String(item.id).toUpperCase() === normalizedOperatorId
+      (item) => String(item.id || "").toUpperCase() === normalizedOperatorId
     );
 
     if (!form.shift) {
@@ -515,6 +513,14 @@ export default function ProductionEntryForm() {
       }
     }
 
+    if (!existingOperator && normalizedOperatorId && normalizedOperatorName) {
+      const newOperator = {
+        id: normalizedOperatorId,
+        name: normalizedOperatorName,
+      };
+      setOperatorMaster((prev) => [...prev, newOperator]);
+    }
+
     const finalEntry = {
       ...form,
       target,
@@ -534,51 +540,20 @@ export default function ProductionEntryForm() {
       createdAt: new Date().toISOString(),
     };
 
-    const response = await fetch("/api/save-production-entry.php", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(finalEntry),
-    });
-
-    const rawText = await response.text();
-    let result = null;
-
-    try {
-      result = JSON.parse(rawText);
-    } catch {
-      throw new Error(rawText || "Invalid server response");
-    }
-
-    if (!response.ok || !result?.success) {
-      throw new Error(result?.message || "Server save failed");
-    }
-
-    if (!existingOperator && normalizedOperatorId && normalizedOperatorName) {
-      const newOperator = {
-        id: normalizedOperatorId,
-        name: normalizedOperatorName,
-      };
-      setOperatorMaster((prev) => [...prev, newOperator]);
-    }
-
     if (addProductionEntry) {
       addProductionEntry(finalEntry);
     }
 
-    const existingEntries = getStoredJson(STORAGEKEYS.ENTRIES, []);
+    const existingEntries = getStoredJson(STORAGE_KEYS.ENTRIES, []);
     const updatedEntries = [finalEntry, ...existingEntries];
-    localStorage.setItem(STORAGEKEYS.ENTRIES, JSON.stringify(updatedEntries));
+    localStorage.setItem(STORAGE_KEYS.ENTRIES, JSON.stringify(updatedEntries));
 
     alert("Production entry captured successfully");
-    localStorage.removeItem(STORAGEKEYS.FORMDRAFT);
+    localStorage.removeItem(STORAGE_KEYS.FORM_DRAFT);
     setForm(getInitialFormState());
     navigate("/");
-  } catch (error) {
-    alert(error.message || "Data save failed");
-  }
-};
+  };
+
   return (
     <div className="page-shell">
       <link
