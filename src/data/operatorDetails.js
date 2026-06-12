@@ -52,6 +52,7 @@ export const operatorMaster = [
   { id: "494220", name: "N/A" },
   { id: "492299", name: "N/A" },
   { id: "492300", name: "N/A" },
+    { id: "497883", name: "Akash Gupta" },
   { id: "492293", name: "Rubi" },
   { id: "491395", name: "Fhoolbee" },
   { id: "491734", name: "shalnee" },
