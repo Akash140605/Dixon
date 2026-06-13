@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { halls, machineMap, durationSlots } from "../data/formData";
 import { operatorMaster as importedOperatorMaster } from "../data/operatorDetails";
+import { partCycleTimeData, partCycleTimeMap } from "../data/partCycleTimeData";
 import { useProduction } from "../context/ProductionContext";
 
 const STORAGE_KEYS = {
@@ -131,6 +132,7 @@ const createRejectBreakdown = () => [createRejectRow()];
 const createLossTimeRow = () => ({
   reason: "",
   qty: "",
+  minutes: "",
   person: "",
   department: "",
 });
@@ -147,10 +149,30 @@ const calculateGood = (actualValue, rejectValue) => {
   return actual - reject >= 0 ? String(actual - reject) : "0";
 };
 
-const calculateLossTime = (targetValue, actualValue) => {
+const calculateTargetFromCycleTime = (cycleTimeValue) => {
+  const cycleTime = Number(cycleTimeValue || 0);
+  if (!cycleTime) return "";
+  return String(Math.floor(3600 / cycleTime));
+};
+
+const calculateLossQuantity = (targetValue, actualValue) => {
   const target = Number(targetValue || 0);
   const actual = Number(actualValue || 0);
   return target - actual >= 0 ? String(target - actual) : "0";
+};
+
+const calculateLossTimeMinutes = (lossQtyValue, cycleTimeValue) => {
+  const lossQty = Number(lossQtyValue || 0);
+  const cycleTime = Number(cycleTimeValue || 0);
+  if (!lossQty || !cycleTime) return "0";
+  return String(Math.round((lossQty * cycleTime) / 60));
+};
+
+const calculateMinutesFromQty = (qtyValue, cycleTimeValue) => {
+  const qty = Number(qtyValue || 0);
+  const cycleTime = Number(cycleTimeValue || 0);
+  if (!qty || !cycleTime) return "";
+  return String(Math.round((qty * cycleTime) / 60));
 };
 
 const isNonNegativeNumber = (value) => {
@@ -168,6 +190,7 @@ const getInitialFormState = () => ({
   duration: "",
   shift: "",
   part: "",
+  cycleTime: "",
   operatorId: "",
   operator: "",
   isNewOperator: false,
@@ -176,6 +199,7 @@ const getInitialFormState = () => ({
   good: "",
   reject: "",
   lossTime: "",
+  lossTimeMinutes: "",
   lossTimeBreakdown: [createLossTimeRow()],
   remarks: "",
   rejectBreakdown: createRejectBreakdown(),
@@ -207,6 +231,30 @@ const normalizeRejectBreakdown = (rejectBreakdown) => {
   }));
 };
 
+const normalizeLossBreakdown = (lossTimeBreakdown) => {
+  if (!Array.isArray(lossTimeBreakdown) || !lossTimeBreakdown.length) {
+    return [createLossTimeRow()];
+  }
+
+  return lossTimeBreakdown.map((item) => ({
+    reason: typeof item?.reason === "string" ? item.reason : "",
+    qty:
+      item?.qty === 0
+        ? "0"
+        : item?.qty
+        ? String(item.qty)
+        : "",
+    minutes:
+      item?.minutes === 0
+        ? "0"
+        : item?.minutes
+        ? String(item.minutes)
+        : "",
+    person: typeof item?.person === "string" ? item.person : "",
+    department: typeof item?.department === "string" ? item.department : "",
+  }));
+};
+
 const mergeDraftWithDefaults = (draft) => ({
   ...getInitialFormState(),
   ...draft,
@@ -218,10 +266,7 @@ const mergeDraftWithDefaults = (draft) => ({
       ? draft.machineDisplayName
       : "",
   rejectBreakdown: normalizeRejectBreakdown(draft?.rejectBreakdown),
-  lossTimeBreakdown:
-    Array.isArray(draft?.lossTimeBreakdown) && draft.lossTimeBreakdown.length
-      ? draft.lossTimeBreakdown
-      : [createLossTimeRow()],
+  lossTimeBreakdown: normalizeLossBreakdown(draft?.lossTimeBreakdown),
 });
 
 const getFormValidationErrors = (form) => {
@@ -272,13 +317,18 @@ const getFormValidationErrors = (form) => {
 
   if (lossTime > 0) {
     if (lossTimeBreakdownTotal !== lossTime) {
-      errors.lossTimeBreakdown = `Loss time breakdown total is ${lossTimeBreakdownTotal}. It must match production loss time ${lossTime}.`;
+      errors.lossTimeBreakdown = `Loss breakdown total is ${lossTimeBreakdownTotal}. It must match production loss quantity ${lossTime}.`;
     }
 
     form.lossTimeBreakdown.forEach((item, index) => {
       const matchedPerson = getResponsibilityMatch(item.person);
       if (item.reason || item.qty || item.person) {
-        if (!item.reason || Number(item.qty || 0) <= 0 || !item.person || !matchedPerson) {
+        if (
+          !item.reason ||
+          Number(item.qty || 0) <= 0 ||
+          !item.person ||
+          !matchedPerson
+        ) {
           errors[`lossRow-${index}`] =
             "Enter valid reason, quantity and responsible person.";
         }
@@ -293,7 +343,6 @@ export default function ProductionEntryForm() {
   const navigate = useNavigate();
   const productionContext = useProduction();
 
-  const [theme, setTheme] = useState("light");
   const [operatorMaster, setOperatorMaster] = useState(() => {
     const storedOperators = getStoredJson(STORAGE_KEYS.OPERATORS, []);
     return storedOperators.length ? storedOperators : importedOperatorMaster;
@@ -310,10 +359,6 @@ export default function ProductionEntryForm() {
       : null;
 
   useEffect(() => {
-    document.documentElement.setAttribute("data-theme", theme);
-  }, [theme]);
-
-  useEffect(() => {
     localStorage.setItem(STORAGE_KEYS.FORM_DRAFT, JSON.stringify(form));
   }, [form]);
 
@@ -326,27 +371,46 @@ export default function ProductionEntryForm() {
   }, [form.hall]);
 
   const rejectQty = Number(form.reject || 0);
-  const lossTimeQty = Number(form.lossTime || 0);
+  const lossQty = Number(form.lossTime || 0);
   const rejectBreakdownTotal = getRejectBreakdownTotal(form.rejectBreakdown);
   const rejectDifference = rejectQty - rejectBreakdownTotal;
   const lossTimeBreakdownTotal = getLossTimeBreakdownTotal(form.lossTimeBreakdown);
-  const lossTimeDifference = lossTimeQty - lossTimeBreakdownTotal;
-  const showLossTimeFields = lossTimeQty > 0;
+  const lossTimeDifference = lossQty - lossTimeBreakdownTotal;
+  const showLossTimeFields = lossQty > 0;
   const showRejectBreakdown = rejectQty > 0;
   const showNewOperatorNameField = form.isNewOperator;
 
   const validationErrors = useMemo(() => getFormValidationErrors(form), [form]);
 
   const syncDerivedValues = (draft) => {
+    const cycleTime =
+      draft.part && partCycleTimeMap[draft.part]
+        ? String(partCycleTimeMap[draft.part])
+        : draft.cycleTime || "";
+
+    const target =
+      cycleTime && draft.part ? calculateTargetFromCycleTime(cycleTime) : "";
+
     const good = calculateGood(draft.actual, draft.reject);
-    const lossTime = calculateLossTime(draft.target, draft.actual);
+    const lossTime = calculateLossQuantity(target, draft.actual);
+    const lossTimeMinutes = calculateLossTimeMinutes(lossTime, cycleTime);
+
+    const normalizedLossRows =
+      Number(lossTime) > 0
+        ? draft.lossTimeBreakdown.map((item) => ({
+            ...item,
+            minutes: calculateMinutesFromQty(item.qty, cycleTime),
+          }))
+        : [createLossTimeRow()];
 
     return {
       ...draft,
+      cycleTime,
+      target,
       good,
       lossTime,
-      lossTimeBreakdown:
-        Number(lossTime) > 0 ? draft.lossTimeBreakdown : [createLossTimeRow()],
+      lossTimeMinutes,
+      lossTimeBreakdown: normalizedLossRows,
       rejectBreakdown:
         Number(draft.reject || 0) > 0 ? draft.rejectBreakdown : [createRejectRow()],
     };
@@ -406,6 +470,16 @@ export default function ProductionEntryForm() {
       return;
     }
 
+    if (name === "part") {
+      setForm((prev) =>
+        syncDerivedValues({
+          ...prev,
+          part: value,
+        })
+      );
+      return;
+    }
+
     if (name === "operatorId") {
       const cleanValue = value.toUpperCase();
       const matchedOperator = operatorMaster.find(
@@ -421,7 +495,7 @@ export default function ProductionEntryForm() {
       return;
     }
 
-    if (name === "target" || name === "actual" || name === "reject") {
+    if (name === "actual" || name === "reject") {
       setForm((prev) =>
         syncDerivedValues({
           ...prev,
@@ -472,6 +546,8 @@ export default function ProductionEntryForm() {
 
   const handleLossTimeRowChange = (index, field, value) => {
     setForm((prev) => {
+      const cycleTime = Number(prev.cycleTime || 0);
+
       const updatedRows = prev.lossTimeBreakdown.map((item, itemIndex) => {
         if (itemIndex !== index) return item;
 
@@ -489,6 +565,10 @@ export default function ProductionEntryForm() {
           return {
             ...item,
             qty: cleanValue === "" ? "" : String(cleanValue),
+            minutes:
+              cleanValue === ""
+                ? ""
+                : calculateMinutesFromQty(cleanValue, cycleTime),
           };
         }
 
@@ -536,6 +616,7 @@ export default function ProductionEntryForm() {
     const reject = Number(form.reject || 0);
     const good = Math.max(actual - reject, 0);
     const lossTime = Math.max(target - actual, 0);
+    const lossTimeMinutes = Number(form.lossTimeMinutes || 0);
 
     const finalRejectBreakdown = form.rejectBreakdown
       .map((item) => ({
@@ -550,6 +631,7 @@ export default function ProductionEntryForm() {
         return {
           reason: String(item.reason || "").trim(),
           qty: Number(item.qty || 0),
+          minutes: Number(item.minutes || 0),
           person: matchedPerson ? matchedPerson.name : "",
           department: matchedPerson ? matchedPerson.department : "",
           validPerson: Boolean(matchedPerson),
@@ -581,7 +663,7 @@ export default function ProductionEntryForm() {
     }
 
     if (!form.part.trim()) {
-      alert("Please enter part description.");
+      alert("Please select part.");
       return;
     }
 
@@ -610,11 +692,13 @@ export default function ProductionEntryForm() {
 
     const finalEntry = {
       ...form,
+      cycleTime: Number(form.cycleTime || 0),
       target,
       actual,
       good,
       reject,
       lossTime,
+      lossTimeMinutes,
       operatorId: normalizedOperatorId,
       operator: normalizedOperatorName,
       isNewOperator: !existingOperator,
@@ -653,19 +737,11 @@ export default function ProductionEntryForm() {
           <div className="header-left">
             <h1 className="page-title">Production Entry Form</h1>
             <p className="page-subtitle">
-              Record production, rejection and loss-time information with real-time validation.
+              Simple mobile-friendly production entry with auto target and loss calculation.
             </p>
           </div>
 
           <div className="header-actions">
-            <button
-              type="button"
-              className="theme-toggle"
-              onClick={() => setTheme((prev) => (prev === "light" ? "dark" : "light"))}
-            >
-              {theme === "light" ? "Dark" : "Light"} Mode
-            </button>
-
             <Link to="/" className="back-link">
               Back to Dashboard
             </Link>
@@ -751,15 +827,30 @@ export default function ProductionEntryForm() {
               />
             </Field>
 
-            <Field label="Part Description">
-              <input
-                type="text"
+            <Field label="Part Name">
+              <select
                 name="part"
                 value={form.part}
                 onChange={handleChange}
-                placeholder="Enter part description"
                 className="field"
                 required
+              >
+                <option value="">Select Part</option>
+                {partCycleTimeData.map((item) => (
+                  <option key={item.partName} value={item.partName}>
+                    {item.partName}
+                  </option>
+                ))}
+              </select>
+            </Field>
+
+            <Field label="Cycle Time (sec)">
+              <input
+                type="number"
+                name="cycleTime"
+                value={form.cycleTime}
+                className={getFieldClassName(false, true)}
+                readOnly
               />
             </Field>
           </div>
@@ -800,15 +891,13 @@ export default function ProductionEntryForm() {
           <SectionTitle title="Production Metrics" />
 
           <div className="form-grid">
-            <Field label="Target Quantity" error={validationErrors.target}>
+            <Field label="Target Quantity / Hour" error={validationErrors.target}>
               <input
                 type="number"
                 name="target"
                 value={form.target}
-                onChange={handleChange}
-                placeholder="Target quantity"
-                className={getFieldClassName(validationErrors.target)}
-                min="0"
+                className={getFieldClassName(validationErrors.target, true)}
+                readOnly
               />
             </Field>
 
@@ -848,11 +937,22 @@ export default function ProductionEntryForm() {
               />
             </Field>
 
-            <Field label="Production Loss Time">
+            <Field label="Production Loss (Qty)">
               <input
                 type="number"
                 name="lossTime"
                 value={form.lossTime}
+                className={getFieldClassName(false, true)}
+                readOnly
+                tabIndex={-1}
+              />
+            </Field>
+
+            <Field label="Production Loss Time (min)">
+              <input
+                type="number"
+                name="lossTimeMinutes"
+                value={form.lossTimeMinutes}
                 className={getFieldClassName(false, true)}
                 readOnly
                 tabIndex={-1}
@@ -868,22 +968,14 @@ export default function ProductionEntryForm() {
                 <div>
                   <h3 className="breakdown-title">Reason-wise Rejection Allocation</h3>
                   <p className="breakdown-subtitle">
-                    Enter rejected quantity first, then allocate the quantity across rejection reasons.
+                    Rejected quantity ko reasons me split karo.
                   </p>
                 </div>
 
                 <div className="breakdown-stats">
-                  <div className="stat-chip">
-                    Rejected <strong>{rejectQty}</strong>
-                  </div>
-                  <div className="stat-chip">
-                    Allocated <strong>{rejectBreakdownTotal}</strong>
-                  </div>
-                  <div
-                    className={`stat-chip ${
-                      rejectDifference === 0 ? "ok-chip" : "error-chip"
-                    }`}
-                  >
+                  <div className="stat-chip">Rejected <strong>{rejectQty}</strong></div>
+                  <div className="stat-chip">Allocated <strong>{rejectBreakdownTotal}</strong></div>
+                  <div className={`stat-chip ${rejectDifference === 0 ? "ok-chip" : "error-chip"}`}>
                     Difference <strong>{rejectDifference}</strong>
                   </div>
                 </div>
@@ -894,17 +986,6 @@ export default function ProductionEntryForm() {
                   {validationErrors.rejectBreakdown}
                 </p>
               ) : null}
-
-              <div className="selected-reject-chips">
-                {form.rejectBreakdown
-                  .filter((item) => item.reason && Number(item.qty || 0) > 0)
-                  .map((item) => (
-                    <div key={item.id} className="reason-chip">
-                      <span>{item.reason}</span>
-                      <strong>{item.qty}</strong>
-                    </div>
-                  ))}
-              </div>
 
               <div className="reject-rows">
                 {form.rejectBreakdown.map((item, index) => {
@@ -989,7 +1070,7 @@ export default function ProductionEntryForm() {
           ) : (
             <div className="breakdown-card compact-note">
               <p className="breakdown-subtitle">
-                Rejection breakdown is not required when rejected quantity is zero.
+                Rejection breakdown zero reject par required nahi hai.
               </p>
             </div>
           )}
@@ -1001,24 +1082,16 @@ export default function ProductionEntryForm() {
               <div className="responsibility-card">
                 <div className="responsibility-head">
                   <div>
-                    <h3 className="breakdown-title">Loss Time Responsibility Allocation</h3>
+                    <h3 className="breakdown-title">Loss Allocation</h3>
                     <p className="breakdown-subtitle">
-                      Map production loss time to valid reasons, quantities and responsible personnel.
+                      Loss quantity ko reason aur responsible person ke saath map karo.
                     </p>
                   </div>
 
                   <div className="breakdown-stats">
-                    <div className="stat-chip">
-                      Loss Time <strong>{lossTimeQty}</strong>
-                    </div>
-                    <div className="stat-chip">
-                      Allocated <strong>{lossTimeBreakdownTotal}</strong>
-                    </div>
-                    <div
-                      className={`stat-chip ${
-                        lossTimeDifference === 0 ? "ok-chip" : "error-chip"
-                      }`}
-                    >
+                    <div className="stat-chip">Loss Qty <strong>{lossQty}</strong></div>
+                    <div className="stat-chip">Allocated <strong>{lossTimeBreakdownTotal}</strong></div>
+                    <div className={`stat-chip ${lossTimeDifference === 0 ? "ok-chip" : "error-chip"}`}>
                       Difference <strong>{lossTimeDifference}</strong>
                     </div>
                   </div>
@@ -1076,6 +1149,15 @@ export default function ProductionEntryForm() {
                             }
                             className={getFieldClassName(rowError)}
                             placeholder="0"
+                          />
+                        </Field>
+
+                        <Field label="Loss Time (min)">
+                          <input
+                            type="number"
+                            value={item.minutes || ""}
+                            className={getFieldClassName(false, true)}
+                            readOnly
                           />
                         </Field>
 
@@ -1137,19 +1219,11 @@ export default function ProductionEntryForm() {
                 name="remarks"
                 value={form.remarks}
                 onChange={handleChange}
-                rows="5"
-                placeholder="Enter operational remarks, if any"
+                rows="4"
+                placeholder="Enter remarks"
                 className="field textarea-field"
               />
             </Field>
-          </div>
-
-          <div className="summary-grid">
-            <SummaryCard label="Target" value={form.target || 0} tone="purple" />
-            <SummaryCard label="Actual" value={form.actual || 0} tone="blue" />
-            <SummaryCard label="Rejected" value={form.reject || 0} tone="red" />
-            <SummaryCard label="Accepted" value={form.good || 0} tone="green" />
-            <SummaryCard label="Loss Time" value={form.lossTime || 0} tone="amber" />
           </div>
 
           <div className="action-row">
@@ -1169,69 +1243,29 @@ export default function ProductionEntryForm() {
       </div>
 
       <style>{`
+        * {
+          box-sizing: border-box;
+        }
+
         :root {
           --font-body: "Satoshi", Inter, ui-sans-serif, system-ui, sans-serif;
-          --bg: #f4f6f8;
-          --bg-2: #eef2f6;
+          --bg: #f6f7fb;
           --surface: #ffffff;
           --surface-soft: #f8fafc;
           --surface-readonly: #f1f5f9;
-          --border: #d4dce6;
+          --border: #d8dee7;
           --border-strong: #94a3b8;
-          --text: #223142;
-          --text-soft: #66788a;
-          --heading: #0f1720;
+          --text: #0f172a;
+          --text-soft: #64748b;
           --primary: #0f172a;
           --primary-hover: #1e293b;
-          --success: #166534;
-          --success-soft: #ecfdf3;
           --danger: #b42318;
           --danger-soft: #fef3f2;
-          --warning: #a16207;
-          --warning-soft: #fff7e6;
-          --info: #1d4ed8;
-          --info-soft: #eff6ff;
-          --purple: #6d28d9;
-          --purple-soft: #f3e8ff;
-          --amber: #b45309;
-          --amber-soft: #fffbeb;
-          --shadow: 0 10px 30px rgba(15, 23, 42, 0.07);
-          --shadow-soft: 0 4px 14px rgba(15, 23, 42, 0.05);
+          --success: #166534;
+          --success-soft: #ecfdf3;
+          --shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
           --radius: 16px;
-          --radius-sm: 10px;
-        }
-
-        [data-theme="dark"] {
-          --bg: #0f1720;
-          --bg-2: #111827;
-          --surface: #111827;
-          --surface-soft: #17202d;
-          --surface-readonly: #1a2431;
-          --border: #334155;
-          --border-strong: #475569;
-          --text: #e5edf5;
-          --text-soft: #94a3b8;
-          --heading: #ffffff;
-          --primary: #e2e8f0;
-          --primary-hover: #cbd5e1;
-          --success: #4ade80;
-          --success-soft: #14251d;
-          --danger: #fb7185;
-          --danger-soft: #30131a;
-          --warning: #f59e0b;
-          --warning-soft: #33250a;
-          --info: #60a5fa;
-          --info-soft: #172554;
-          --purple: #c084fc;
-          --purple-soft: #2e1065;
-          --amber: #fbbf24;
-          --amber-soft: #3f2a06;
-          --shadow: 0 14px 34px rgba(0, 0, 0, 0.18);
-          --shadow-soft: 0 6px 16px rgba(0, 0, 0, 0.12);
-        }
-
-        * {
-          box-sizing: border-box;
+          --radius-sm: 12px;
         }
 
         html,
@@ -1239,17 +1273,17 @@ export default function ProductionEntryForm() {
           margin: 0;
           padding: 0;
           font-family: var(--font-body);
-          background: linear-gradient(180deg, var(--bg) 0%, var(--bg-2) 100%);
+          background: var(--bg);
           color: var(--text);
         }
 
         .page-shell {
           min-height: 100vh;
-          padding: 24px 12px 40px;
+          padding: 14px 10px 28px;
         }
 
         .page-container {
-          width: min(1180px, 100%);
+          width: min(980px, 100%);
           margin: 0 auto;
         }
 
@@ -1257,24 +1291,23 @@ export default function ProductionEntryForm() {
           display: flex;
           justify-content: space-between;
           align-items: flex-start;
-          gap: 20px;
+          gap: 14px;
           flex-wrap: wrap;
-          margin-bottom: 20px;
+          margin-bottom: 16px;
         }
 
         .page-title {
           margin: 0;
-          font-size: clamp(1.7rem, 1.2rem + 1.4vw, 2.5rem);
-          color: var(--heading);
+          font-size: clamp(1.5rem, 1.2rem + 1vw, 2.1rem);
           font-weight: 900;
-          letter-spacing: -0.04em;
+          color: var(--text);
         }
 
         .page-subtitle {
-          margin: 8px 0 0;
+          margin: 6px 0 0;
           color: var(--text-soft);
-          font-size: 0.98rem;
-          line-height: 1.6;
+          font-size: 0.95rem;
+          line-height: 1.5;
         }
 
         .header-actions {
@@ -1283,7 +1316,6 @@ export default function ProductionEntryForm() {
           flex-wrap: wrap;
         }
 
-        .theme-toggle,
         .back-link,
         .primary-btn,
         .secondary-btn {
@@ -1292,25 +1324,17 @@ export default function ProductionEntryForm() {
           transition: 0.2s ease;
         }
 
-        .theme-toggle,
         .back-link {
           padding: 0 14px;
           border: 1px solid var(--border);
           background: var(--surface);
-          color: var(--heading);
+          color: var(--text);
           text-decoration: none;
           font-size: 0.92rem;
           font-weight: 700;
-          box-shadow: var(--shadow-soft);
           display: inline-flex;
           align-items: center;
           justify-content: center;
-        }
-
-        .theme-toggle:hover,
-        .back-link:hover {
-          border-color: var(--border-strong);
-          background: var(--surface-soft);
         }
 
         .form-card {
@@ -1318,16 +1342,16 @@ export default function ProductionEntryForm() {
           border: 1px solid var(--border);
           border-radius: var(--radius);
           box-shadow: var(--shadow);
-          padding: 20px;
+          padding: 16px;
         }
 
         .section-title {
-          margin: 24px 0 12px;
-          color: var(--heading);
-          font-size: 0.92rem;
+          margin: 22px 0 12px;
+          font-size: 0.88rem;
           font-weight: 900;
-          letter-spacing: 0.08em;
           text-transform: uppercase;
+          letter-spacing: 0.08em;
+          color: var(--text);
         }
 
         .section-title:first-child {
@@ -1336,8 +1360,8 @@ export default function ProductionEntryForm() {
 
         .form-grid {
           display: grid;
-          grid-template-columns: repeat(3, minmax(0, 1fr));
-          gap: 14px;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 12px;
         }
 
         .single-grid {
@@ -1352,74 +1376,58 @@ export default function ProductionEntryForm() {
 
         .field-label {
           font-size: 0.88rem;
-          font-weight: 800;
-          color: var(--heading);
-          line-height: 1.25;
+          font-weight: 700;
+          color: var(--text);
         }
 
         .field {
           width: 100%;
-          min-height: 48px;
-          padding: 0.8rem 0.9rem;
+          min-height: 46px;
+          padding: 0.78rem 0.9rem;
           border: 1px solid var(--border);
           border-radius: var(--radius-sm);
           background: var(--surface);
-          color: var(--heading);
+          color: var(--text);
           outline: none;
           font-size: 0.95rem;
           font-weight: 600;
-          transition: 0.2s ease;
         }
 
         .field::placeholder {
           color: var(--text-soft);
           font-weight: 500;
-          opacity: 1;
         }
 
         .field:focus {
           border-color: var(--border-strong);
-          box-shadow: 0 0 0 3px rgba(148, 163, 184, 0.15);
+          box-shadow: 0 0 0 3px rgba(148, 163, 184, 0.14);
         }
 
         .field-readonly {
           background: var(--surface-readonly);
-          color: var(--heading);
-          font-weight: 700;
         }
 
         .field-error {
           border-color: var(--danger) !important;
-          background: color-mix(in srgb, var(--danger-soft) 35%, var(--surface) 65%);
-          box-shadow: 0 0 0 3px rgba(180, 35, 24, 0.14) !important;
-        }
-
-        .field-error:focus {
-          border-color: var(--danger) !important;
-          box-shadow: 0 0 0 3px rgba(180, 35, 24, 0.18) !important;
+          background: #fff7f7;
+          box-shadow: 0 0 0 3px rgba(180, 35, 24, 0.12) !important;
         }
 
         .textarea-field {
-          min-height: 110px;
+          min-height: 96px;
           resize: vertical;
           padding-top: 12px;
         }
 
         .inline-error {
-          margin: 4px 0 0;
+          margin: 3px 0 0;
           color: var(--danger);
           font-size: 0.78rem;
           font-weight: 700;
-          line-height: 1.4;
         }
 
         .section-error {
-          margin-top: 10px;
-          margin-bottom: 2px;
-        }
-
-        .field-wrap:has(.field-error) .field-label {
-          color: var(--danger);
+          margin-bottom: 10px;
         }
 
         .breakdown-card,
@@ -1435,23 +1443,23 @@ export default function ProductionEntryForm() {
           display: flex;
           justify-content: space-between;
           align-items: flex-start;
-          gap: 14px;
+          gap: 12px;
           flex-wrap: wrap;
-          margin-bottom: 14px;
+          margin-bottom: 12px;
         }
 
         .breakdown-title {
           margin: 0;
-          color: var(--heading);
           font-size: 1rem;
-          font-weight: 900;
+          font-weight: 800;
+          color: var(--text);
         }
 
         .breakdown-subtitle {
-          margin: 5px 0 0;
+          margin: 4px 0 0;
           color: var(--text-soft);
           font-size: 0.9rem;
-          line-height: 1.6;
+          line-height: 1.5;
         }
 
         .breakdown-stats {
@@ -1461,13 +1469,13 @@ export default function ProductionEntryForm() {
         }
 
         .stat-chip {
-          padding: 9px 11px;
+          padding: 8px 12px;
           background: var(--surface);
           border: 1px solid var(--border);
           border-radius: 999px;
-          color: var(--heading);
           font-size: 0.82rem;
           font-weight: 700;
+          color: var(--text);
         }
 
         .ok-chip {
@@ -1478,31 +1486,7 @@ export default function ProductionEntryForm() {
         .error-chip {
           background: var(--danger-soft);
           color: var(--danger);
-          border-color: color-mix(in srgb, var(--danger) 35%, var(--border) 65%);
-        }
-
-        .selected-reject-chips {
-          display: flex;
-          flex-wrap: wrap;
-          gap: 8px;
-          margin-bottom: 12px;
-        }
-
-        .reason-chip {
-          display: inline-flex;
-          align-items: center;
-          gap: 8px;
-          padding: 8px 12px;
-          border-radius: 999px;
-          border: 1px solid var(--border);
-          background: var(--surface);
-          color: var(--heading);
-          font-size: 0.84rem;
-          font-weight: 700;
-        }
-
-        .reason-chip strong {
-          color: var(--danger);
+          border-color: #efc5c0;
         }
 
         .reject-rows,
@@ -1512,9 +1496,10 @@ export default function ProductionEntryForm() {
           gap: 12px;
         }
 
-        .reject-row {
+        .reject-row,
+        .loss-row {
           display: grid;
-          grid-template-columns: 1.4fr 0.8fr 130px;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
           gap: 12px;
           align-items: end;
           padding: 12px;
@@ -1524,19 +1509,12 @@ export default function ProductionEntryForm() {
         }
 
         .loss-row {
-          display: grid;
-          grid-template-columns: 1.5fr 0.7fr 1fr 1fr 140px;
-          gap: 12px;
-          align-items: end;
-          padding: 12px;
-          border: 1px solid var(--border);
-          border-radius: var(--radius-sm);
-          background: var(--surface);
+          grid-template-columns: repeat(3, minmax(0, 1fr));
         }
 
         .row-error {
-          border-color: color-mix(in srgb, var(--danger) 55%, var(--border) 45%) !important;
-          background: color-mix(in srgb, var(--danger-soft) 22%, var(--surface) 78%) !important;
+          border-color: #efc5c0 !important;
+          background: #fffafa !important;
         }
 
         .full-row {
@@ -1550,81 +1528,10 @@ export default function ProductionEntryForm() {
         .reject-actions {
           margin-top: 12px;
           display: flex;
-          justify-content: flex-start;
         }
 
         .compact-note {
           padding: 16px;
-        }
-
-        .summary-grid {
-          display: grid;
-          grid-template-columns: repeat(5, minmax(0, 1fr));
-          gap: 12px;
-          margin-top: 20px;
-        }
-
-        .summary-card {
-          border: 1px solid var(--border);
-          border-radius: var(--radius);
-          background: var(--surface-soft);
-          padding: 16px;
-        }
-
-        .summary-label {
-          margin-bottom: 8px;
-          color: var(--text-soft);
-          font-size: 0.75rem;
-          font-weight: 800;
-          letter-spacing: 0.18em;
-          text-transform: uppercase;
-        }
-
-        .summary-value {
-          font-size: clamp(1.45rem, 1.2rem + 1vw, 2rem);
-          font-weight: 900;
-          line-height: 1;
-          letter-spacing: -0.04em;
-        }
-
-        .summary-card.blue {
-          background: var(--info-soft);
-        }
-
-        .summary-card.blue .summary-value {
-          color: var(--info);
-        }
-
-        .summary-card.green {
-          background: #ecfdf5;
-        }
-
-        .summary-card.green .summary-value {
-          color: #15803d;
-        }
-
-        .summary-card.red {
-          background: #fff1f2;
-        }
-
-        .summary-card.red .summary-value {
-          color: #be123c;
-        }
-
-        .summary-card.purple {
-          background: var(--purple-soft);
-        }
-
-        .summary-card.purple .summary-value {
-          color: var(--purple);
-        }
-
-        .summary-card.amber {
-          background: var(--amber-soft);
-        }
-
-        .summary-card.amber .summary-value {
-          color: var(--amber);
         }
 
         .action-row {
@@ -1640,11 +1547,12 @@ export default function ProductionEntryForm() {
           font-size: 0.94rem;
           font-weight: 800;
           border: 1px solid transparent;
+          cursor: pointer;
         }
 
         .primary-btn {
           background: var(--primary);
-          color: #ffffff;
+          color: #fff;
           border-color: var(--primary);
         }
 
@@ -1655,13 +1563,12 @@ export default function ProductionEntryForm() {
 
         .secondary-btn {
           background: var(--surface);
-          color: var(--heading);
+          color: var(--text);
           border-color: var(--border);
         }
 
         .secondary-btn:hover {
-          border-color: var(--border-strong);
-          background: var(--surface-soft);
+          background: #f8fafc;
         }
 
         .small-btn {
@@ -1680,51 +1587,30 @@ export default function ProductionEntryForm() {
           background: var(--danger-soft);
         }
 
-        @media (max-width: 1024px) {
-          .form-grid {
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-          }
-
-          .summary-grid {
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-          }
-
+        @media (max-width: 768px) {
+          .form-grid,
+          .reject-row,
           .loss-row {
-            grid-template-columns: 1fr 1fr;
-          }
-
-          .action-field {
-            grid-column: 1 / -1;
-          }
-        }
-
-        @media (max-width: 640px) {
-          .page-shell {
-            padding: 14px 8px 24px;
-          }
-
-          .form-card {
-            padding: 14px;
-          }
-
-          .header-actions {
-            width: 100%;
-            display: grid;
             grid-template-columns: 1fr;
           }
 
-          .theme-toggle,
+          .header-actions,
+          .action-row {
+            width: 100%;
+          }
+
           .back-link,
           .primary-btn,
           .secondary-btn {
             width: 100%;
           }
 
-          .form-grid,
-          .summary-grid,
-          .loss-row,
-          .reject-row {
-            grid-template-columns: 1fr;
+          .page-shell {
+            padding: 10px 8px 20px;
+          }
+
+          .form-card {
+            padding: 14px;
           }
 
           .breakdown-head,
@@ -1747,15 +1633,6 @@ function Field({ label, error, children }) {
       <label className="field-label">{label}</label>
       {children}
       {error ? <p className="inline-error">{error}</p> : null}
-    </div>
-  );
-}
-
-function SummaryCard({ label, value, tone }) {
-  return (
-    <div className={`summary-card ${tone}`}>
-      <div className="summary-label">{label}</div>
-      <div className="summary-value">{value}</div>
     </div>
   );
 }

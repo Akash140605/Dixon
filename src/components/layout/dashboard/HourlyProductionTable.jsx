@@ -47,7 +47,7 @@ const REJECT_REASON_ALIASES = {
   "colour variation": "Colour Change",
   "color variation": "Colour Change",
 
-  "warpage": "Warpage",
+  warpage: "Warpage",
   "warp age": "Warpage",
 
   "flow mark": "Flow Mark",
@@ -55,16 +55,16 @@ const REJECT_REASON_ALIASES = {
   "cut mark": "Flow Mark",
   "cut marks": "Flow Mark",
 
-  "shrinkage": "Shrinkage",
-  "shrink": "Shrinkage",
+  shrinkage: "Shrinkage",
+  shrink: "Shrinkage",
 
-  "mixing": "Mixing",
-  "micing": "Mixing",
+  mixing: "Mixing",
+  micing: "Mixing",
   "material mixing": "Mixing",
 
   "burn mark": "Burn Mark",
   "burn marks": "Burn Mark",
-  "burn": "Burn Mark",
+  burn: "Burn Mark",
 
   "weld line": "Weld Line",
   "weld lines": "Weld Line",
@@ -83,8 +83,17 @@ const normalizeShift = (value) => {
 
 const normalizeDate = (value) => {
   if (!value) return "";
+
   if (value instanceof Date && !Number.isNaN(value.getTime())) {
     return value.toISOString().slice(0, 10);
+  }
+
+  if (typeof value === "number" && Number.isFinite(value)) {
+    const excelEpoch = new Date(Date.UTC(1899, 11, 30));
+    const parsed = new Date(excelEpoch.getTime() + value * 86400000);
+    if (!Number.isNaN(parsed.getTime())) {
+      return parsed.toISOString().slice(0, 10);
+    }
   }
 
   const raw = String(value).trim();
@@ -241,9 +250,11 @@ const getReasonTotals = (rows) => {
 };
 
 const getMachineDisplay = (row) => {
+  if (typeof row.machineDisplayName === "string" && row.machineDisplayName.trim()) {
+    return row.machineDisplayName;
+  }
   if (typeof row.machine === "string" && row.machine.trim()) return row.machine;
   if (row.machine?.displayName) return row.machine.displayName;
-  if (row.machineDisplayName) return row.machineDisplayName;
   if (row.machineCode && row.machineName) return `${row.machineCode} - ${row.machineName}`;
   if (row.machineCode) return row.machineCode;
   return "";
@@ -258,18 +269,24 @@ export default function HourlyProductionTable({ rows = [] }) {
     return rows.map((row) => {
       const target = Number(row.target ?? 0);
       const actual = Number(row.actual ?? 0);
-      const reject = Number(row.reject ?? 0);
-      const good = Number(row.good ?? Math.max(actual - reject, 0));
-      const lossTime = Number(row.lossTime ?? Math.max(target - actual, 0));
 
       const parsedRejectBreakdown =
         Array.isArray(row.rejectBreakdown) && row.rejectBreakdown.length
           ? row.rejectBreakdown
           : parseRejectBreakdownText(row.rejectBreakdownText || "");
 
+      const reject =
+        row.reject !== undefined && row.reject !== null
+          ? Number(row.reject ?? 0)
+          : parsedRejectBreakdown.reduce((sum, item) => sum + Number(item.qty || 0), 0);
+
+      const good = Number(row.good ?? Math.max(actual - reject, 0));
+      const lossTime = Number(row.lossTime ?? Math.max(target - actual, 0));
+
       const reasonWiseRejects = getReasonWiseRejects({
         ...row,
         rejectBreakdown: parsedRejectBreakdown,
+        reject,
       });
 
       return {
@@ -479,29 +496,29 @@ export default function HourlyProductionTable({ rows = [] }) {
     const worksheet = XLSX.utils.json_to_sheet(excelData);
     worksheet["!cols"] = [
       { wch: 8 },
-      { wch: 14 },
-      { wch: 14 },
-      { wch: 24 },
-      { wch: 14 },
-      { wch: 18 },
-      { wch: 8 },
-      { wch: 18 },
-      { wch: 22 },
+      { wch: 15 },
       { wch: 16 },
-      { wch: 18 },
-      { wch: 14 },
-      { wch: 10 },
-      { wch: 10 },
-      { wch: 10 },
-      { wch: 10 },
-      { wch: 12 },
-      ...REJECT_REASONS.map(() => ({ wch: 15 })),
-      { wch: 38 },
-      { wch: 44 },
-      { wch: 32 },
-      { wch: 12 },
+      { wch: 30 },
+      { wch: 16 },
       { wch: 24 },
+      { wch: 10 },
+      { wch: 18 },
+      { wch: 28 },
+      { wch: 16 },
       { wch: 22 },
+      { wch: 14 },
+      { wch: 12 },
+      { wch: 12 },
+      { wch: 12 },
+      { wch: 12 },
+      { wch: 14 },
+      ...REJECT_REASONS.map(() => ({ wch: 18 })),
+      { wch: 46 },
+      { wch: 58 },
+      { wch: 40 },
+      { wch: 12 },
+      { wch: 28 },
+      { wch: 24 },
     ];
 
     const workbook = XLSX.utils.book_new();
@@ -685,38 +702,38 @@ export default function HourlyProductionTable({ rows = [] }) {
         </div>
 
         <div className="table-scroll-wrap border border-slate-300 bg-white">
-          <table className="printable-table min-w-[4200px] table-fixed text-sm">
+          <table className="printable-table min-w-[5200px] table-fixed text-sm">
             <thead className="print:bg-transparent">
               <tr className="border-b border-slate-400 text-slate-800">
-                <TableHead className="w-[110px]">Date</TableHead>
-                <TableHead className="w-[90px]">Hall</TableHead>
-                <TableHead className="w-[180px]">Machine Display</TableHead>
-                <TableHead className="w-[110px]">Machine Code</TableHead>
-                <TableHead className="w-[150px]">Machine Name</TableHead>
-                <TableHead className="w-[70px]">Shift</TableHead>
-                <TableHead className="w-[130px]">Hour</TableHead>
-                <TableHead className="w-[160px]">Part</TableHead>
-                <TableHead className="w-[100px]">Operator ID</TableHead>
-                <TableHead className="w-[150px]">Operator</TableHead>
-                <TableHead className="w-[110px]">New Operator</TableHead>
-                <TableHead className="w-[90px]">Target</TableHead>
-                <TableHead className="w-[90px]">Actual</TableHead>
-                <TableHead className="w-[90px]">Good</TableHead>
-                <TableHead className="w-[90px]">Reject</TableHead>
-                <TableHead className="w-[100px]">Loss Time</TableHead>
+                <TableHead className="w-[130px]">Date</TableHead>
+                <TableHead className="w-[110px]">Hall</TableHead>
+                <TableHead className="w-[240px]">Machine Display</TableHead>
+                <TableHead className="w-[130px]">Machine Code</TableHead>
+                <TableHead className="w-[220px]">Machine Name</TableHead>
+                <TableHead className="w-[80px]">Shift</TableHead>
+                <TableHead className="w-[150px]">Hour</TableHead>
+                <TableHead className="w-[220px]">Part</TableHead>
+                <TableHead className="w-[130px]">Operator ID</TableHead>
+                <TableHead className="w-[190px]">Operator</TableHead>
+                <TableHead className="w-[130px]">New Operator</TableHead>
+                <TableHead className="w-[100px]">Target</TableHead>
+                <TableHead className="w-[100px]">Actual</TableHead>
+                <TableHead className="w-[100px]">Good</TableHead>
+                <TableHead className="w-[100px]">Reject</TableHead>
+                <TableHead className="w-[120px]">Loss Time</TableHead>
 
                 {REJECT_REASONS.map((reason) => (
-                  <TableHead key={reason} className="w-[120px]">
+                  <TableHead key={reason} className="w-[140px]">
                     {reason}
                   </TableHead>
                 ))}
 
-                <TableHead className="w-[260px]">Reject Breakdown</TableHead>
-                <TableHead className="w-[320px]">Loss Time Breakdown</TableHead>
-                <TableHead className="w-[240px]">Responsible Persons</TableHead>
-                <TableHead className="w-[100px]">Reject %</TableHead>
-                <TableHead className="w-[180px]">Remarks</TableHead>
-                <TableHead className="w-[170px]">Created At</TableHead>
+                <TableHead className="w-[340px]">Reject Breakdown</TableHead>
+                <TableHead className="w-[420px]">Loss Time Breakdown</TableHead>
+                <TableHead className="w-[300px]">Responsible Persons</TableHead>
+                <TableHead className="w-[110px]">Reject %</TableHead>
+                <TableHead className="w-[260px]">Remarks</TableHead>
+                <TableHead className="w-[220px]">Created At</TableHead>
               </tr>
             </thead>
 
@@ -871,22 +888,22 @@ export default function HourlyProductionTable({ rows = [] }) {
           width: 100%;
           max-width: 100%;
           overflow: auto;
-          height: calc(100vh - 180px);
-          min-height: 620px;
-          max-height: 980px;
+          height: calc(100vh - 160px);
+          min-height: 640px;
+          max-height: 1000px;
         }
 
         .line-clamp-2-custom {
           display: -webkit-box;
-          -webkit-line-clamp: 2;
+          -webkit-line-clamp: 3;
           -webkit-box-orient: vertical;
           overflow: hidden;
-          line-height: 1.3rem;
-          max-height: 2.6rem;
+          line-height: 1.35rem;
+          max-height: 4.05rem;
         }
 
         .table-cell-fixed {
-          padding: 0.875rem 0.75rem;
+          padding: 1rem 0.875rem;
           vertical-align: top;
           color: rgb(51 65 85);
           word-break: break-word;

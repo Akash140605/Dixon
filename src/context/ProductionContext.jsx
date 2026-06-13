@@ -23,11 +23,9 @@ function parseHourLabel(hourLabel = "") {
 
 function normalizeShift(shiftValue = "") {
   if (!shiftValue) return "";
-
   if (["A", "Shift A", "Shift 1", "1"].includes(shiftValue)) return "Shift A";
   if (["B", "Shift B", "Shift 2", "2"].includes(shiftValue)) return "Shift B";
   if (["C", "Shift C", "Shift 3", "3"].includes(shiftValue)) return "Shift C";
-
   return shiftValue.startsWith("Shift ") ? shiftValue : `Shift ${shiftValue}`;
 }
 
@@ -47,29 +45,32 @@ function normalizeRejectBreakdown(breakdown = []) {
   if (!Array.isArray(breakdown)) return [];
 
   return breakdown
-    .map((item) => ({
+    .map((item, index) => ({
+      id: item?.id || `reject-${index}-${Date.now()}`,
       reason: item?.reason || "",
       qty: Number(item?.qty || 0),
     }))
     .filter((item) => item.reason && item.qty > 0);
 }
 
-function normalizeResponsibilities(responsibilities = []) {
-  if (!Array.isArray(responsibilities)) return [];
+function normalizeResponsibilities(rows = []) {
+  if (!Array.isArray(rows)) return [];
 
-  return responsibilities
+  return rows
     .map((item) => ({
-      person: item?.person || item?.name || "",
-      department: item?.department || "",
       reason: item?.reason || "",
       qty: Number(item?.qty || 0),
+      person: item?.person || item?.name || "",
+      department: item?.department || "",
     }))
-    .filter((item) => item.person || item.reason || item.qty > 0);
+    .filter((item) => item.reason || item.person || item.qty > 0);
 }
 
 function buildRejectReasonText(rejectBreakdown = [], rejectReason = "") {
   if (Array.isArray(rejectBreakdown) && rejectBreakdown.length > 0) {
-    return rejectBreakdown.map((item) => `${item.reason}: ${item.qty}`).join(", ");
+    return rejectBreakdown
+      .map((item) => `${item.reason}: ${item.qty}`)
+      .join(", ");
   }
 
   return rejectReason || "";
@@ -93,6 +94,9 @@ function buildResponsibilitiesText(responsibilities = []) {
 }
 
 function getMachineDisplay(row = {}) {
+  if (typeof row.machineDisplayName === "string" && row.machineDisplayName.trim()) {
+    return row.machineDisplayName;
+  }
   if (typeof row.machine === "string" && row.machine.trim()) return row.machine;
   if (row.machine?.displayName) return row.machine.displayName;
   if (row.machineCode && row.machineName) return `${row.machineCode} - ${row.machineName}`;
@@ -101,18 +105,31 @@ function getMachineDisplay(row = {}) {
 }
 
 function normalizeHourlyRow(row = {}) {
-  const normalizedBreakdown = normalizeRejectBreakdown(row.rejectBreakdown);
+  const normalizedBreakdown = normalizeRejectBreakdown(
+    row.rejectBreakdown || []
+  );
+
   const normalizedResponsibilities = normalizeResponsibilities(
     row.lossTimeBreakdown || row.responsibilities || []
   );
 
   const actual = Number(row.actual || 0);
-  const reject = Number(row.reject || 0);
+  const reject =
+    row.reject !== undefined && row.reject !== null
+      ? Number(row.reject || 0)
+      : normalizedBreakdown.reduce((sum, item) => sum + Number(item.qty || 0), 0);
+
   const target = Number(row.target || 0);
+
   const good =
     row.good !== undefined && row.good !== null
       ? Number(row.good || 0)
       : Math.max(actual - reject, 0);
+
+  const lossTime =
+    row.lossTime !== undefined && row.lossTime !== null
+      ? Number(row.lossTime || 0)
+      : Math.max(target - actual, 0);
 
   return {
     ...row,
@@ -128,13 +145,14 @@ function normalizeHourlyRow(row = {}) {
     good,
     reject,
     target,
-    lossTime: Number(row.lossTime || Math.max(target - actual, 0)),
+    lossTime,
     rejectReason: row.rejectReason || normalizedBreakdown[0]?.reason || "",
     rejectBreakdown: normalizedBreakdown,
     rejectBreakdownText: buildRejectReasonText(
       normalizedBreakdown,
       row.rejectReason || ""
     ),
+    lossTimeBreakdown: normalizedResponsibilities,
     responsibilities: normalizedResponsibilities,
     responsibilitiesText: buildResponsibilitiesText(normalizedResponsibilities),
     remarks: row.remarks || "",
@@ -142,6 +160,7 @@ function normalizeHourlyRow(row = {}) {
     machine: getMachineDisplay(row),
     machineCode: row.machineCode || row.machine?.code || "",
     machineName: row.machineName || row.machine?.name || "",
+    machineDisplayName: row.machineDisplayName || getMachineDisplay(row),
     part: row.part || "",
     date: row.date || "",
     createdAt: row.createdAt || "",
@@ -149,30 +168,11 @@ function normalizeHourlyRow(row = {}) {
 }
 
 function updateSummary(hourlyTable) {
-  const totalProduction = hourlyTable.reduce(
-    (sum, row) => sum + Number(row.actual || 0),
-    0
-  );
-
-  const goodProduction = hourlyTable.reduce(
-    (sum, row) => sum + Number(row.good || 0),
-    0
-  );
-
-  const rejection = hourlyTable.reduce(
-    (sum, row) => sum + Number(row.reject || 0),
-    0
-  );
-
-  const targetProduction = hourlyTable.reduce(
-    (sum, row) => sum + Number(row.target || 0),
-    0
-  );
-
-  const lossTime = hourlyTable.reduce(
-    (sum, row) => sum + Number(row.lossTime || 0),
-    0
-  );
+  const totalProduction = hourlyTable.reduce((sum, row) => sum + Number(row.actual || 0), 0);
+  const goodProduction = hourlyTable.reduce((sum, row) => sum + Number(row.good || 0), 0);
+  const rejection = hourlyTable.reduce((sum, row) => sum + Number(row.reject || 0), 0);
+  const targetProduction = hourlyTable.reduce((sum, row) => sum + Number(row.target || 0), 0);
+  const lossTime = hourlyTable.reduce((sum, row) => sum + Number(row.lossTime || 0), 0);
 
   return {
     totalProduction,
@@ -213,9 +213,11 @@ function buildDayWiseTrend(hourlyTable) {
     current.lossTime += Number(row.lossTime || 0);
   });
 
-  return Array.from(dayWiseMap.values()).sort((a, b) =>
-    a.date.localeCompare(b.date)
-  );
+  return Array.from(dayWiseMap.values()).sort((a, b) => {
+    const d1 = new Date(`${a.date} 2026`);
+    const d2 = new Date(`${b.date} 2026`);
+    return d1 - d2;
+  });
 }
 
 function buildShiftWiseProduction(hourlyTable) {
@@ -223,6 +225,7 @@ function buildShiftWiseProduction(hourlyTable) {
 
   hourlyTable.forEach((row) => {
     const shiftKey = normalizeShift(row.shiftLabel || row.shift);
+    if (!shiftKey) return;
 
     if (!shiftMap.has(shiftKey)) {
       shiftMap.set(shiftKey, {
@@ -274,13 +277,14 @@ function buildMachineHourlyTrend(hourlyTable) {
   const grouped = {};
 
   hourlyTable.forEach((row) => {
-    const machineKey = `${row.hall}__${row.machine}`;
+    const machineKey = `${row.hall}__${row.machineCode || row.machine}`;
 
     if (!grouped[machineKey]) {
       grouped[machineKey] = {
         machine: row.machine,
         machineCode: row.machineCode || "",
         machineName: row.machineName || "",
+        machineDisplayName: row.machineDisplayName || row.machine,
         hall: row.hall,
         shift: normalizeShift(row.shiftLabel || row.shift),
         operatorId: row.operatorId || "",
@@ -305,6 +309,7 @@ function buildMachineHourlyTrend(hourlyTable) {
       rejectReason: row.rejectReason || "",
       rejectBreakdown: row.rejectBreakdown || [],
       rejectBreakdownText: row.rejectBreakdownText || "",
+      lossTimeBreakdown: row.lossTimeBreakdown || [],
       responsibilities: row.responsibilities || [],
       responsibilitiesText: row.responsibilitiesText || "",
       remarks: row.remarks || "",
@@ -328,6 +333,8 @@ function buildHallWiseProduction(hourlyTable) {
   const hallMap = new Map();
 
   hourlyTable.forEach((row) => {
+    if (!row.hall) return;
+
     if (!hallMap.has(row.hall)) {
       hallMap.set(row.hall, {
         hall: row.hall,
@@ -448,21 +455,31 @@ export function ProductionProvider({ children }) {
 
   const addProductionEntry = (entry) => {
     setDashboardData((prev) => {
-      const actual = Number(entry.actual || 0);
-      const reject = Number(entry.reject || 0);
-      const target = Number(entry.target || 0);
-      const good =
-        entry.good !== undefined && entry.good !== null
-          ? Number(entry.good || 0)
-          : Math.max(actual - reject, 0);
-      const lossTime = Number(entry.lossTime || Math.max(target - actual, 0));
-
       const normalizedShift = normalizeShift(entry.shift || entry.shiftLabel);
       const compactShift = normalizedShift.replace("Shift ", "");
+
       const normalizedBreakdown = normalizeRejectBreakdown(entry.rejectBreakdown || []);
       const normalizedResponsibilities = normalizeResponsibilities(
         entry.lossTimeBreakdown || entry.responsibilities || []
       );
+
+      const actual = Number(entry.actual || 0);
+      const target = Number(entry.target || 0);
+
+      const reject =
+        entry.reject !== undefined && entry.reject !== null
+          ? Number(entry.reject || 0)
+          : normalizedBreakdown.reduce((sum, item) => sum + Number(item.qty || 0), 0);
+
+      const good =
+        entry.good !== undefined && entry.good !== null
+          ? Number(entry.good || 0)
+          : Math.max(actual - reject, 0);
+
+      const lossTime =
+        entry.lossTime !== undefined && entry.lossTime !== null
+          ? Number(entry.lossTime || 0)
+          : Math.max(target - actual, 0);
 
       const newHourlyEntry = normalizeHourlyRow({
         id: entry.id || createEntryId(),
@@ -471,6 +488,7 @@ export function ProductionProvider({ children }) {
         machine: entry.machine,
         machineCode: entry.machineCode || "",
         machineName: entry.machineName || "",
+        machineDisplayName: entry.machineDisplayName || entry.machine || "",
         shift: compactShift,
         shiftLabel: normalizedShift,
         hour: entry.hour || entry.duration,
@@ -487,6 +505,7 @@ export function ProductionProvider({ children }) {
         rejectReason: normalizedBreakdown[0]?.reason || entry.rejectReason || "",
         rejectBreakdown: normalizedBreakdown,
         lossTimeBreakdown: normalizedResponsibilities,
+        responsibilities: normalizedResponsibilities,
         remarks: entry.remarks || "",
         createdAt: entry.createdAt || new Date().toISOString(),
       });
@@ -524,7 +543,11 @@ export function ProductionProvider({ children }) {
       const filterShiftLabel = normalizeShift(filters.shift);
       const shiftMatch = !filters.shift || rowShiftLabel === filterShiftLabel;
 
-      const machineMatch = !filters.machine || row.machine === filters.machine;
+      const machineMatch =
+        !filters.machine ||
+        row.machine === filters.machine ||
+        row.machineCode === filters.machine ||
+        row.machineDisplayName === filters.machine;
 
       const operatorMatch =
         !filters.operator ||
@@ -532,9 +555,7 @@ export function ProductionProvider({ children }) {
 
       const operatorIdMatch =
         !filters.operatorId ||
-        (row.operatorId || "")
-          .toLowerCase()
-          .includes(filters.operatorId.toLowerCase());
+        (row.operatorId || "").toLowerCase().includes(filters.operatorId.toLowerCase());
 
       const rejectReasonMatch =
         !filters.rejectReason ||
