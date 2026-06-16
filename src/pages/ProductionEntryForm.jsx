@@ -1236,7 +1236,7 @@ const payload = {
           />
         </div>
 
-        <nav className="tab-bar" aria-label="Form sections">
+        {/* <nav className="tab-bar" aria-label="Form sections">
           {sectionTabs.map((tab) => (
             <button
               key={tab.key}
@@ -1250,7 +1250,7 @@ const payload = {
               {tab.label}
             </button>
           ))}
-        </nav>
+        </nav> */}
 
         <form onSubmit={handleSubmit} className="form-layout">
           <section ref={sectionRefs.production} className="form-section">
