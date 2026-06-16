@@ -683,21 +683,25 @@ export default function ProductionEntryForm() {
       draft.part && partCycleTimeMap[draft.part]
         ? String(partCycleTimeMap[draft.part])
         : draft.cycleTime;
+const target =
+  draft.part && cycleTime
+    ? calculateTargetFromCycleTime(cycleTime)
+    : "";
 
-    const target =
-      draft.part && cycleTime ? calculateTargetFromCycleTime(cycleTime) : "";
-    const good =
-      draft.isEditMode && draft.good !== ""
-        ? String(draft.good)
-        : calculateGood(draft.actual, reject);
-    const lossTime =
-      draft.isEditMode && draft.lossTime !== ""
-        ? String(draft.lossTime)
-        : calculateLossQuantity(target, draft.actual);
-    const lossTimeMinutes =
-      draft.isEditMode && draft.lossTimeMinutes !== ""
-        ? String(draft.lossTimeMinutes)
-        : calculateLossTimeMinutes(lossTime, cycleTime);
+const good = calculateGood(
+  draft.actual,
+  reject
+);
+
+const lossTime = calculateLossQuantity(
+  target,
+  draft.actual
+);
+
+const lossTimeMinutes = calculateLossTimeMinutes(
+  lossTime,
+  cycleTime
+);
 
     const normalizedLossRows =
       Number(lossTime) > 0

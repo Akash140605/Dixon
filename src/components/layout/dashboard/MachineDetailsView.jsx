@@ -351,13 +351,13 @@ function DetailTable({ rows, onEditRow, onDeleteRow, deletingRowId }) {
                   </td>
                   <td className="whitespace-nowrap px-4 py-3 text-center">
                     <div className="flex items-center justify-center gap-2">
-                      <button
+                      {/* <button
                         type="button"
                         onClick={() => onEditRow(row)}
                         className="inline-flex h-8 items-center justify-center rounded-[4px] border border-sky-200 bg-sky-50 px-3 text-xs font-semibold text-sky-700 transition hover:bg-sky-100"
                       >
                         Edit
-                      </button>
+                      </button> */}
                       <button
                         type="button"
                         onClick={() => onDeleteRow(row)}
@@ -381,7 +381,13 @@ function DetailTable({ rows, onEditRow, onDeleteRow, deletingRowId }) {
 export default function MachineDetailsView() {
   const { hallId, machineId } = useParams();
   const navigate = useNavigate();
-  const { machineHourlyTrend, filteredDashboardData } = useProduction();
+
+  const {
+    machineHourlyTrend,
+    filteredDashboardData,
+    deleteProductionEntry,
+  } = useProduction();
+  
   const localData = useMemo(() => readLocalProductionData(), []);
 
   const hallLabel = getHallLabelFromId(hallId);
@@ -691,6 +697,7 @@ export default function MachineDetailsView() {
         prefillFromMachineDetails: true,
         source: "machine-details-edit",
         isEditMode: true,
+        id: row?.id, // CRITICAL FIX: ID for Edit PUT Request 
         rowId: row?.entryId || getRowIdentity(row),
         entryId: row?.entryId || row?.id || getRowIdentity(row),
         originalRow: row,
@@ -716,41 +723,50 @@ export default function MachineDetailsView() {
         actual: toNumber(row?.actual),
         good: toNumber(row?.good),
         reject: toNumber(row?.reject),
-        lossTime: toNumber(row?.lossTime ?? 0),
+        
+        // CRITICAL FIX: Ensure loss mapping matches the form precisely
+        lossTime: toNumber(row?.lossTime ?? row?.lossQty ?? 0),
         lossMinutes: toNumber(
           row?.lossMinutes ?? row?.lossTimeMinutes ?? row?.lossTime ?? 0
         ),
+        lossTimeMinutes: toNumber(
+          row?.lossMinutes ?? row?.lossTimeMinutes ?? row?.lossTime ?? 0
+        ),
+        
         rejectReason: row?.rejectReason || row?.rejectBreakdownText || "",
+        
+        // CRITICAL FIX: Safe mapping for breakdown arrays 
         rejectBreakdown: Array.isArray(row?.rejectBreakdown) ? row.rejectBreakdown : [],
-        lossTimeBreakdown: Array.isArray(row?.lossTimeBreakdown) ? row.lossTimeBreakdown : [],
+        lossTimeBreakdown: Array.isArray(row?.lossTimeBreakdown) && row.lossTimeBreakdown.length > 0
+          ? row.lossTimeBreakdown 
+          : Array.isArray(row?.responsibilities) ? row.responsibilities : [],
+        
         remarks: row?.remarks || "",
       },
     });
   };
 
   const handleDeleteRow = async (row) => {
-    const rowId = getRowIdentity(row);
-    const label = [
-      formatSafeDate(row?.date),
-      row?.shiftLabel || row?.shift || "",
-      row?.hour || row?.duration || "",
-      row?.operator || "",
-    ]
-      .filter(Boolean)
-      .join(" | ");
-
     const confirmed = window.confirm(
-      `Kya aap is row ko delete karna chahte hain?\n\n${label || "Selected row"}`
+      `Delete Entry?\n\n${row.machine || ""} | ${row.date || ""}`
     );
 
     if (!confirmed) return;
 
     try {
-      setDeletingRowId(rowId);
-      setDeletedRowIds((prev) => (prev.includes(rowId) ? prev : [...prev, rowId]));
+      setDeletingRowId(getRowIdentity(row));
+
+      if (deleteProductionEntry) {
+        await deleteProductionEntry(row.id);
+      } else {
+        throw new Error("deleteProductionEntry context missing");
+      }
+
+      alert("Entry deleted successfully");
+
     } catch (error) {
-      console.error("Failed to delete row:", error);
-      window.alert("Row delete nahi ho payi. Please dobara try karo.");
+      console.error(error);
+      alert(error?.message || "Failed to delete entry");
     } finally {
       setDeletingRowId("");
     }
@@ -798,7 +814,7 @@ export default function MachineDetailsView() {
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2 text-xs text-slate-300">
                   <Link to="/" className="hover:text-white">
-                    Halls
+                    Hals
                   </Link>
                   <span>/</span>
                   <Link to={`/hall/${hallId}`} className="hover:text-white">
