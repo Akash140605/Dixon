@@ -1,12 +1,13 @@
-import Topbar from "../components/layout/Topbar";
 import FilterBar from "../components/layout/FilterBar";
 
 import ProductionLineChart from "../components/layout/dashboard/ProductionLineChart";
 import ShiftBarChart from "../components/layout/dashboard/ShiftBarChart";
-import RejectionPieChart from "../components/layout/dashboard/RejectionPieChart";
 import HourlyProductionTable from "../components/layout/dashboard/HourlyProductionTable";
 import MachineHourlyChart from "../components/layout/dashboard/MachineHourlyChart";
 import ProductionInsightsChart from "../components/layout/dashboard/HourlyComparisonChart";
+import HallPerformanceCard from "../components/layout/dashboard/HallPerformaceCard";
+import OperatorPerformancePanel from "../components/layout/dashboard/OperatorPerformancePanel";
+import HallCardsView from "../components/layout/dashboard/HallCardsView";
 
 import { useProduction } from "../context/ProductionContext";
 
@@ -14,219 +15,149 @@ function formatNumber(value) {
   return Number(value || 0).toLocaleString("en-IN");
 }
 
-function calculateAchievement(actual, target) {
-  if (!Number(target)) return 0;
-  return (Number(actual || 0) / Number(target || 0)) * 100;
+function toNumber(value) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
 }
 
-function calculateRejectRate(reject, actual) {
-  if (!Number(actual)) return 0;
-  return (Number(reject || 0) / Number(actual || 0)) * 100;
+function safeArray(value) {
+  return Array.isArray(value) ? value : [];
 }
 
-function calculateGoodRate(good, actual) {
-  if (!Number(actual)) return 0;
-  return (Number(good || 0) / Number(actual || 0)) * 100;
+function DashboardSection({ title, subtitle, children, compact = false }) {
+  return (
+    <section className={compact ? "space-y-3" : "space-y-4"}>
+      {(title || subtitle) && (
+        <div className="flex flex-col gap-2">
+          {title ? (
+            <h2 className="text-[15px] font-semibold tracking-tight text-slate-950 md:text-lg">
+              {title}
+            </h2>
+          ) : null}
+
+          {subtitle ? (
+            <p className="max-w-3xl text-sm leading-5 text-slate-500">
+              {subtitle}
+            </p>
+          ) : null}
+        </div>
+      )}
+
+      {children}
+    </section>
+  );
 }
 
-function KpiCard({ label, value, tone = "default", hint }) {
+function Panel({ className = "", children, padded = false }) {
+  return (
+    <section
+      className={`min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm ${
+        padded ? "p-4 md:p-5" : ""
+      } ${className}`}
+    >
+      {children}
+    </section>
+  );
+}
+
+function KpiCard({ label, value, tone = "default", helper }) {
   const toneMap = {
-    default: {
-      value: "text-slate-900",
-      chip: "bg-slate-50 text-slate-600 border-slate-200",
-    },
-    sky: {
-      value: "text-sky-700",
-      chip: "bg-sky-50 text-sky-700 border-sky-200",
-    },
-    emerald: {
-      value: "text-emerald-700",
-      chip: "bg-emerald-50 text-emerald-700 border-emerald-200",
-    },
-    rose: {
-      value: "text-rose-700",
-      chip: "bg-rose-50 text-rose-700 border-rose-200",
-    },
+    default: "text-slate-950",
+    sky: "text-sky-700",
+    emerald: "text-emerald-700",
+    rose: "text-rose-700",
+    violet: "text-violet-700",
+    amber: "text-amber-700",
   };
 
-  const styles = toneMap[tone] || toneMap.default;
-
   return (
-    <div className="border border-slate-200 bg-white p-5 shadow-sm">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500">
-            {label}
-          </p>
-          <p className={`mt-2 text-2xl font-bold tabular-nums ${styles.value}`}>
-            {value}
-          </p>
-        </div>
+    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+        {label}
+      </p>
 
-        {hint ? (
-          <span className={`border px-2.5 py-1 text-[11px] font-semibold ${styles.chip}`}>
-            {hint}
-          </span>
-        ) : null}
-      </div>
+      <p
+        className={`mt-2 text-[26px] font-semibold tracking-tight tabular-nums ${
+          toneMap[tone] || toneMap.default
+        }`}
+      >
+        {value}
+      </p>
+
+      {helper ? (
+        <p className="mt-1 text-xs font-medium text-slate-500">{helper}</p>
+      ) : null}
     </div>
   );
 }
 
-function PerformanceCard({
-  title,
-  subtitle,
-  countLabel,
-  items = [],
-  type = "hall",
+function MetricsHeader({
+  totalTarget,
+  totalActual,
+  totalGood,
+  totalReject,
+  totalLossQty,
+  totalLossMinutes,
+  overallAchievement,
+  overallRejectRate,
+  overallGoodRate,
 }) {
-  const isHall = type === "hall";
-
   return (
-    <section className="border border-slate-200 bg-white p-5 shadow-sm md:p-6">
-      <div className="mb-5 flex items-start justify-between gap-4">
+    <Panel padded>
+      <div className="space-y-4">
         <div>
-          <h3 className="text-lg font-bold text-slate-900 md:text-xl">
-            {title}
-          </h3>
-          <p className="mt-1 text-sm text-slate-600">{subtitle}</p>
+          <h1 className="text-xl font-semibold tracking-tight text-slate-950 md:text-2xl">
+            Production Dashboard
+          </h1>
+          <p className="mt-1 text-sm text-slate-500">
+            Consolidated production performance, trends, diagnostics, and operational summaries.
+          </p>
         </div>
 
-        <div className="rounded-full border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700">
-          {countLabel}
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
+          <KpiCard
+            label="Total Target"
+            value={formatNumber(totalTarget)}
+            helper="Planned production"
+          />
+
+          <KpiCard
+            label="Total Actual"
+            value={formatNumber(totalActual)}
+            tone="sky"
+            helper={`Achievement: ${overallAchievement.toFixed(1)}%`}
+          />
+
+          <KpiCard
+            label="Good Output"
+            value={formatNumber(totalGood)}
+            tone="emerald"
+            helper={`Good rate: ${overallGoodRate.toFixed(1)}%`}
+          />
+
+          <KpiCard
+            label="Total Reject"
+            value={formatNumber(totalReject)}
+            tone="rose"
+            helper={`Reject rate: ${overallRejectRate.toFixed(1)}%`}
+          />
+
+          <KpiCard
+            label="Loss Quantity"
+            value={formatNumber(totalLossQty)}
+            tone="violet"
+            helper="Production gap"
+          />
+
+          <KpiCard
+            label="Loss Minutes"
+            value={formatNumber(totalLossMinutes)}
+            tone="amber"
+            helper="Downtime"
+          />
         </div>
       </div>
-
-      <div
-        className="custom-scroll space-y-4 overflow-y-auto pr-1"
-        style={{ height: "min(460px, 62vh)", scrollbarWidth: "thin" }}
-      >
-        {items.length > 0 ? (
-          [...items]
-            .sort((a, b) => Number(b.actual || 0) - Number(a.actual || 0))
-            .map((item, index) => {
-              const name = isHall
-                ? item.hall || "Unknown Hall"
-                : item.operator || "Unknown Operator";
-
-              const achievement = calculateAchievement(item.actual, item.target);
-              const rejectRate = calculateRejectRate(item.reject, item.actual);
-              const goodRate = calculateGoodRate(item.good, item.actual);
-
-              const primaryRate = isHall ? achievement : goodRate;
-              const primaryLabel = isHall ? "Target Achievement" : "Good Output Ratio";
-              const primaryValue = isHall ? achievement.toFixed(1) : goodRate.toFixed(1);
-              const primaryBarColor = isHall
-                ? achievement >= 100
-                  ? "bg-emerald-600"
-                  : "bg-sky-600"
-                : "bg-emerald-600";
-
-              return (
-                <div
-                  key={`${name}-${index}`}
-                  className="border border-slate-200 bg-slate-50 p-4 shadow-sm"
-                >
-                  <div className="flex flex-col gap-4">
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                      <div className="min-w-0">
-                        <h4 className="text-base font-bold text-slate-900">
-                          {name}
-                        </h4>
-
-                        <div className="mt-2 flex flex-wrap gap-2 text-xs">
-                          {!isHall ? (
-                            <span className="border border-slate-200 bg-white px-2 py-1 text-slate-600">
-                              Entries:{" "}
-                              <span className="font-semibold tabular-nums">
-                                {formatNumber(item.entries)}
-                              </span>
-                            </span>
-                          ) : null}
-
-                          {isHall ? (
-                            <span className="border border-slate-200 bg-white px-2 py-1 text-slate-600">
-                              Target:{" "}
-                              <span className="font-semibold tabular-nums">
-                                {formatNumber(item.target)}
-                              </span>
-                            </span>
-                          ) : null}
-
-                          <span className="border border-slate-200 bg-white px-2 py-1 text-slate-600">
-                            Good:{" "}
-                            <span className="font-semibold tabular-nums">
-                              {formatNumber(item.good)}
-                            </span>
-                          </span>
-
-                          <span className="border border-slate-200 bg-white px-2 py-1 text-slate-600">
-                            Reject:{" "}
-                            <span className="font-semibold tabular-nums">
-                              {formatNumber(item.reject)}
-                            </span>
-                          </span>
-                        </div>
-                      </div>
-
-                      <div className="text-left sm:text-right">
-                        <p className="text-xs text-slate-500">Actual</p>
-                        <p
-                          className={`text-xl font-bold tabular-nums ${
-                            isHall ? "text-sky-700" : "text-emerald-700"
-                          }`}
-                        >
-                          {formatNumber(item.actual)}
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="border border-slate-200 bg-white p-3">
-                        <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-slate-500">
-                          {isHall ? "Achievement" : "Good Rate"}
-                        </p>
-                        <p className="mt-1 text-sm font-bold text-slate-900 tabular-nums">
-                          {(isHall ? achievement : goodRate).toFixed(1)}%
-                        </p>
-                      </div>
-
-                      <div className="border border-slate-200 bg-white p-3">
-                        <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-slate-500">
-                          Reject Rate
-                        </p>
-                        <p className="mt-1 text-sm font-bold text-rose-700 tabular-nums">
-                          {rejectRate.toFixed(1)}%
-                        </p>
-                      </div>
-                    </div>
-
-                    <div>
-                      <div className="mb-2 flex items-center justify-between text-xs text-slate-500">
-                        <span>{primaryLabel}</span>
-                        <span className="tabular-nums">{primaryValue}%</span>
-                      </div>
-
-                      <div className="h-2 overflow-hidden rounded-full bg-slate-200">
-                        <div
-                          className={`h-full rounded-full transition-all ${primaryBarColor}`}
-                          style={{ width: `${Math.min(primaryRate, 100)}%` }}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              );
-            })
-        ) : (
-          <div className="border border-dashed border-slate-300 bg-slate-50 p-6 text-sm text-slate-500">
-            {isHall
-              ? "Koi hall-wise data available nahi hai."
-              : "Koi operator data available nahi hai."}
-          </div>
-        )}
-      </div>
-    </section>
+    </Panel>
   );
 }
 
@@ -239,127 +170,154 @@ export default function Dashboard() {
   } = useProduction();
 
   const summary = filteredDashboardData?.summary || {};
-  const dayWiseTrend = filteredDashboardData?.dayWiseTrend || [];
-  const shiftWiseData = filteredDashboardData?.shiftWiseProduction || [];
-  const rejectionBreakdown = filteredDashboardData?.rejectionBreakdown || [];
-  const hourlyRows = filteredDashboardData?.hourlyTable || [];
 
-  const hallData = hallWiseProduction || [];
-  const operatorData = operatorWiseProduction || [];
-  const machineTrendData = machineHourlyTrend || [];
+  const dayWiseTrend = safeArray(filteredDashboardData?.dayWiseTrend);
+  const shiftWiseData = safeArray(filteredDashboardData?.shiftWiseProduction);
+  const hourlyRows = safeArray(filteredDashboardData?.hourlyTable);
 
-  const totalTarget = Number(summary.targetProduction || 0);
-  const totalActual = Number(summary.totalProduction || 0);
-  const totalGood = Number(summary.goodProduction || 0);
-  const totalReject = Number(summary.rejection || 0);
+  const hallData = safeArray(hallWiseProduction);
+  const operatorData = safeArray(operatorWiseProduction);
+  const machineTrendData = safeArray(machineHourlyTrend);
+
+  const totalTarget = toNumber(
+    summary.targetProduction ?? summary.totalTarget ?? summary.target,
+  );
+
+  const totalActual = toNumber(
+    summary.totalProduction ?? summary.totalActual ?? summary.actual,
+  );
+
+  const totalGood = toNumber(
+    summary.goodProduction ?? summary.totalGood ?? summary.good,
+  );
+
+  const totalReject = toNumber(
+    summary.rejection ?? summary.totalReject ?? summary.reject,
+  );
+
+  const totalLossQty = toNumber(
+    summary.lossQty ??
+      summary.totalLoss ??
+      summary.lossTime ??
+      summary.productionLoss,
+  );
+
+  const totalLossMinutes = toNumber(
+    summary.lossMinutes ??
+      summary.totalLossMinutes ??
+      summary.lossTimeMinutes,
+  );
 
   const overallAchievement =
     totalTarget > 0 ? (totalActual / totalTarget) * 100 : 0;
+
   const overallRejectRate =
     totalActual > 0 ? (totalReject / totalActual) * 100 : 0;
+
   const overallGoodRate =
     totalActual > 0 ? (totalGood / totalActual) * 100 : 0;
 
   return (
     <div className="min-h-screen bg-slate-100 text-slate-900">
-      <Topbar />
+      <div className="sticky top-0 z-40 border-b border-slate-200 bg-slate-100/95 backdrop-blur supports-[backdrop-filter]:bg-slate-100/80">
+        <div className="mx-auto w-full max-w-[1920px] px-4 py-3 md:px-6 2xl:px-8">
+          <FilterBar />
+        </div>
+      </div>
 
       <main className="min-w-0">
-        <div className="space-y-6 p-4 md:p-6 xl:p-8">
-          <FilterBar />
+        <div className="mx-auto w-full max-w-[1920px] space-y-6 px-4 py-4 md:px-6 md:py-5 2xl:px-8">
+          <MetricsHeader
+            totalTarget={totalTarget}
+            totalActual={totalActual}
+            totalGood={totalGood}
+            totalReject={totalReject}
+            totalLossQty={totalLossQty}
+            totalLossMinutes={totalLossMinutes}
+            overallAchievement={overallAchievement}
+            overallRejectRate={overallRejectRate}
+            overallGoodRate={overallGoodRate}
+          />
 
-          <section className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5">
-            <KpiCard
-              label="Total Target"
-              value={formatNumber(totalTarget)}
-              hint="Planned"
+          <DashboardSection
+            title="Hall Navigation"
+            subtitle="Select one of the 5 halls to drill down into machine-level details."
+          >
+            <HallCardsView
+              machineHourlyTrend={machineTrendData}
+              hourlyRows={hourlyRows}
+              limit={5}
             />
-            <KpiCard
-              label="Total Actual"
-              value={formatNumber(totalActual)}
-              tone="sky"
-              hint="Produced"
-            />
-            <KpiCard
-              label="Total Good"
-              value={formatNumber(totalGood)}
-              tone="emerald"
-              hint={`${overallGoodRate.toFixed(1)}%`}
-            />
-            <KpiCard
-              label="Achievement"
-              value={`${overallAchievement.toFixed(1)}%`}
-              tone="emerald"
-              hint="Against target"
-            />
-            <KpiCard
-              label="Reject Rate"
-              value={`${overallRejectRate.toFixed(1)}%`}
-              tone="rose"
-              hint={formatNumber(totalReject)}
-            />
-          </section>
+          </DashboardSection>
 
-          <section className="grid grid-cols-1 gap-6 2xl:grid-cols-12 items-start">
-            <div className="space-y-6 2xl:col-span-5">
+          <DashboardSection
+            title="Production Trend"
+            subtitle="Daily production trend for the selected period."
+          >
+            <Panel className="w-full" padded>
               <ProductionLineChart data={dayWiseTrend} />
-              <ShiftBarChart data={shiftWiseData} />
-              <RejectionPieChart data={rejectionBreakdown} />
-            </div>
+            </Panel>
+          </DashboardSection>
 
-            <div className="min-w-0 space-y-6 2xl:col-span-7">
+          <DashboardSection
+            title="Operational Diagnostics"
+            subtitle="Shift analysis, rejection, loss, and comparative operational insights."
+          >
+            <div className="space-y-6">
+              <Panel className="w-full" padded>
+                <ShiftBarChart data={shiftWiseData} />
+              </Panel>
+
+              <Panel className="w-full" padded>
+                <ProductionInsightsChart
+                  hourlyTable={hourlyRows}
+                  machineHourlyTrend={machineTrendData}
+                  shiftWiseProduction={shiftWiseData}
+                  dayWiseTrend={dayWiseTrend}
+                />
+              </Panel>
+            </div>
+          </DashboardSection>
+
+          <DashboardSection
+            title="Hourly Production Table"
+            subtitle="Detailed production records for the selected view."
+          >
+            <Panel className="w-full" padded>
               <HourlyProductionTable rows={hourlyRows} />
+            </Panel>
+          </DashboardSection>
 
-              <ProductionInsightsChart
-                hourlyTable={hourlyRows}
-                machineHourlyTrend={machineTrendData}
-                shiftWiseProduction={shiftWiseData}
-                dayWiseTrend={dayWiseTrend}
-              />
+          <DashboardSection
+            title="Machine Hourly Analysis"
+            subtitle="Machine-wise hourly production trends and operational comparison."
+          >
+            <Panel className="w-full" padded>
+              <MachineHourlyChart machineHourlyTrend={machineTrendData} />
+            </Panel>
+          </DashboardSection>
+
+          <DashboardSection
+            title="Performance Summary"
+            subtitle="Hall-level and operator-level performance overview."
+          >
+            <div className="space-y-6">
+              <Panel className="w-full" padded>
+                <HallPerformanceCard
+                  title="Hall Performance"
+                  subtitle="Target, actual, good output, and loss by hall."
+                  countLabel={`${hallData.length} halls`}
+                  items={hallData}
+                />
+              </Panel>
+
+              <Panel className="w-full" padded>
+                <OperatorPerformancePanel items={operatorData} />
+              </Panel>
             </div>
-          </section>
-
-          <MachineHourlyChart machineHourlyTrend={machineTrendData} />
-
-          <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-            <PerformanceCard
-              title="Hall Wise Performance"
-              subtitle="Hall target, output aur quality ka clean overview."
-              countLabel={`${hallData.length} halls`}
-              items={hallData}
-              type="hall"
-            />
-
-            <PerformanceCard
-              title="Operator Performance"
-              subtitle="Operator output aur quality ka simplified overview."
-              countLabel={`${operatorData.length} operators`}
-              items={operatorData}
-              type="operator"
-            />
-          </div>
+          </DashboardSection>
         </div>
       </main>
-
-      <style>{`
-        .custom-scroll::-webkit-scrollbar {
-          width: 8px;
-        }
-
-        .custom-scroll::-webkit-scrollbar-track {
-          background: #e2e8f0;
-          border-radius: 9999px;
-        }
-
-        .custom-scroll::-webkit-scrollbar-thumb {
-          background: #94a3b8;
-          border-radius: 9999px;
-        }
-
-        .custom-scroll::-webkit-scrollbar-thumb:hover {
-          background: #64748b;
-        }
-      `}</style>
     </div>
   );
 }

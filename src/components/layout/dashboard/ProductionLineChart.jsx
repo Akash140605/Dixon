@@ -10,14 +10,20 @@ import {
   Legend,
 } from "recharts";
 
+function toNumber(value) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
 function formatNumber(value) {
-  return Number(value || 0).toLocaleString("en-IN");
+  return toNumber(value).toLocaleString("en-IN");
 }
 
 function formatShortDate(value) {
   if (!value) return "-";
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return String(value);
+
   return parsed.toLocaleDateString("en-IN", {
     day: "2-digit",
     month: "short",
@@ -28,6 +34,7 @@ function formatMonthLabel(value) {
   if (!value) return "-";
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return String(value);
+
   return parsed.toLocaleDateString("en-IN", {
     month: "short",
     year: "2-digit",
@@ -60,6 +67,8 @@ function getThemeTokens(theme = "light") {
       stat: "border-slate-800 bg-slate-900",
       activeTab: "bg-slate-100 text-slate-900 border-slate-100",
       tab: "bg-slate-900 text-slate-300 border-slate-700",
+      input: "bg-slate-900 text-slate-200 border-slate-700",
+      scrollHint: "text-slate-500",
     };
   }
 
@@ -83,6 +92,8 @@ function getThemeTokens(theme = "light") {
     stat: "border-slate-200 bg-slate-50",
     activeTab: "bg-slate-900 text-white border-slate-900",
     tab: "bg-white text-slate-700 border-slate-300",
+    input: "bg-white text-slate-700 border-slate-300",
+    scrollHint: "text-slate-500",
   };
 }
 
@@ -90,11 +101,11 @@ function normalizeChartRow(row = {}) {
   return {
     ...row,
     date: row.date || row.label || "",
-    actual: Number(row.actual ?? row.production ?? 0),
-    good: Number(row.good ?? 0),
-    reject: Number(row.reject ?? row.rejection ?? 0),
-    target: Number(row.target ?? 0),
-    lossTime: Number(row.lossTime ?? 0),
+    actual: toNumber(row.actual ?? row.production ?? 0),
+    good: toNumber(row.good ?? 0),
+    reject: toNumber(row.reject ?? row.rejection ?? 0),
+    target: toNumber(row.target ?? 0),
+    lossTime: toNumber(row.lossTime ?? 0),
   };
 }
 
@@ -110,38 +121,45 @@ function aggregateChunk(rows, label) {
   return {
     label,
     date: rows[0]?.date || "",
-    actual: rows.reduce((sum, row) => sum + Number(row.actual || 0), 0),
-    good: rows.reduce((sum, row) => sum + Number(row.good || 0), 0),
-    reject: rows.reduce((sum, row) => sum + Number(row.reject || 0), 0),
-    target: rows.reduce((sum, row) => sum + Number(row.target || 0), 0),
-    lossTime: rows.reduce((sum, row) => sum + Number(row.lossTime || 0), 0),
+    actual: rows.reduce((sum, row) => sum + toNumber(row.actual), 0),
+    good: rows.reduce((sum, row) => sum + toNumber(row.good), 0),
+    reject: rows.reduce((sum, row) => sum + toNumber(row.reject), 0),
+    target: rows.reduce((sum, row) => sum + toNumber(row.target), 0),
+    lossTime: rows.reduce((sum, row) => sum + toNumber(row.lossTime), 0),
   };
 }
 
 function groupByChunkSize(rows, size) {
   const output = [];
+
   for (let i = 0; i < rows.length; i += size) {
     const chunk = rows.slice(i, i + size);
     const start = chunk[0]?.date;
     const end = chunk[chunk.length - 1]?.date;
+
     output.push(
       aggregateChunk(
         chunk,
-        start === end ? formatShortDate(start) : `${formatShortDate(start)} - ${formatShortDate(end)}`
-      )
+        start === end
+          ? formatShortDate(start)
+          : `${formatShortDate(start)} - ${formatShortDate(end)}`,
+      ),
     );
   }
+
   return output;
 }
 
 function groupWeekly(rows) {
   const buckets = [];
+
   for (let i = 0; i < rows.length; i += 7) {
     const chunk = rows.slice(i, i + 7);
     const start = chunk[0]?.date;
     const end = chunk[chunk.length - 1]?.date;
     buckets.push(aggregateChunk(chunk, getWeekLabel(start, end)));
   }
+
   return buckets;
 }
 
@@ -160,8 +178,83 @@ function groupMonthly(rows) {
   });
 
   return Array.from(map.values()).map((chunk) =>
-    aggregateChunk(chunk, formatMonthLabel(chunk[0]?.date))
+    aggregateChunk(chunk, formatMonthLabel(chunk[0]?.date)),
   );
+}
+
+function toInputDate(value) {
+  if (!value) return "";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "";
+
+  const year = parsed.getFullYear();
+  const month = String(parsed.getMonth() + 1).padStart(2, "0");
+  const day = String(parsed.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+}
+
+function isWithinDateRange(dateValue, fromDate, toDate) {
+  const current = new Date(dateValue);
+  if (Number.isNaN(current.getTime())) return false;
+
+  const currentOnly = new Date(
+    current.getFullYear(),
+    current.getMonth(),
+    current.getDate(),
+  );
+
+  if (fromDate) {
+    const from = new Date(fromDate);
+    const fromOnly = new Date(
+      from.getFullYear(),
+      from.getMonth(),
+      from.getDate(),
+    );
+    if (currentOnly < fromOnly) return false;
+  }
+
+  if (toDate) {
+    const to = new Date(toDate);
+    const toOnly = new Date(to.getFullYear(), to.getMonth(), to.getDate());
+    if (currentOnly > toOnly) return false;
+  }
+
+  return true;
+}
+
+function getScrollableChartWidth(pointsCount, range) {
+  if (range !== "daily") return "100%";
+  if (pointsCount <= 7) return "100%";
+  return Math.max(900, pointsCount * 88);
+}
+
+function getXAxisInterval(pointsCount, range) {
+  if (range !== "daily") return 0;
+  if (pointsCount > 60) return 6;
+  if (pointsCount > 40) return 4;
+  if (pointsCount > 25) return 2;
+  if (pointsCount > 14) return 1;
+  return 0;
+}
+
+function getXAxisAngle(pointsCount, range) {
+  if (range !== "daily") return 0;
+  if (pointsCount > 10) return -30;
+  if (pointsCount > 6) return -20;
+  return 0;
+}
+
+function getXAxisHeight(pointsCount, range) {
+  if (range !== "daily") return 34;
+  if (pointsCount > 10) return 64;
+  if (pointsCount > 6) return 52;
+  return 30;
+}
+
+function shouldShowDots(pointsCount, range) {
+  if (range !== "daily") return true;
+  return pointsCount <= 25;
 }
 
 function StatCard({ label, value, color, theme = "light" }) {
@@ -169,7 +262,7 @@ function StatCard({ label, value, color, theme = "light" }) {
 
   return (
     <div className={`border px-4 py-3 ${t.stat}`}>
-      <p className={`text-[10px] uppercase tracking-[0.16em] font-bold ${t.muted}`}>
+      <p className={`text-[10px] font-bold uppercase tracking-[0.16em] ${t.muted}`}>
         {label}
       </p>
       <p className="mt-1 text-lg font-bold tabular-nums" style={{ color }}>
@@ -205,24 +298,28 @@ function CustomTooltip({ active, payload, label, theme = "light" }) {
             {formatNumber(row.actual)}
           </span>
         </div>
+
         <div className="flex items-center justify-between gap-4">
           <span className={t.muted}>Good</span>
           <span className="font-bold tabular-nums" style={{ color: t.good }}>
             {formatNumber(row.good)}
           </span>
         </div>
+
         <div className="flex items-center justify-between gap-4">
           <span className={t.muted}>Reject</span>
           <span className="font-bold tabular-nums" style={{ color: t.reject }}>
             {formatNumber(row.reject)}
           </span>
         </div>
+
         <div className="flex items-center justify-between gap-4">
           <span className={t.muted}>Target</span>
           <span className="font-bold tabular-nums" style={{ color: t.target }}>
             {formatNumber(row.target)}
           </span>
         </div>
+
         <div className="flex items-center justify-between gap-4">
           <span className={t.muted}>Loss Time</span>
           <span className="font-bold tabular-nums" style={{ color: t.lossTime }}>
@@ -272,40 +369,79 @@ export default function ProductionLineChart({
   ignoreFilters = true,
 }) {
   const t = getThemeTokens(theme);
+
   const [range, setRange] = useState("daily");
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
 
   const baseData = useMemo(() => {
     const normalized = Array.isArray(data) ? data.map(normalizeChartRow) : [];
     return sortByDate(normalized);
   }, [data]);
 
+  const minAvailableDate = useMemo(
+    () => (baseData.length ? toInputDate(baseData[0]?.date) : ""),
+    [baseData],
+  );
+
+  const maxAvailableDate = useMemo(
+    () => (baseData.length ? toInputDate(baseData[baseData.length - 1]?.date) : ""),
+    [baseData],
+  );
+
+  const filteredBaseData = useMemo(() => {
+    return baseData.filter((row) =>
+      isWithinDateRange(row.date, fromDate, toDate),
+    );
+  }, [baseData, fromDate, toDate]);
+
   const chartData = useMemo(() => {
-    if (range === "3day") return groupByChunkSize(baseData, 3);
-    if (range === "5day") return groupByChunkSize(baseData, 5);
-    if (range === "weekly") return groupWeekly(baseData);
-    if (range === "monthly") return groupMonthly(baseData);
-    return baseData.map((row) => ({
+    if (range === "3day") return groupByChunkSize(filteredBaseData, 3);
+    if (range === "5day") return groupByChunkSize(filteredBaseData, 5);
+    if (range === "weekly") return groupWeekly(filteredBaseData);
+    if (range === "monthly") return groupMonthly(filteredBaseData);
+
+    return filteredBaseData.map((row) => ({
       ...row,
       label: formatShortDate(row.date),
     }));
-  }, [baseData, range]);
+  }, [filteredBaseData, range]);
 
   const totals = useMemo(() => {
     return chartData.reduce(
       (acc, row) => {
-        acc.actual += row.actual;
-        acc.good += row.good;
-        acc.reject += row.reject;
-        acc.target += row.target;
-        acc.lossTime += row.lossTime;
+        acc.actual += toNumber(row.actual);
+        acc.good += toNumber(row.good);
+        acc.reject += toNumber(row.reject);
+        acc.target += toNumber(row.target);
+        acc.lossTime += toNumber(row.lossTime);
         return acc;
       },
-      { actual: 0, good: 0, reject: 0, target: 0, lossTime: 0 }
+      { actual: 0, good: 0, reject: 0, target: 0, lossTime: 0 },
     );
   }, [chartData]);
 
   const rejectPercent =
-    totals.actual > 0 ? `${((totals.reject / totals.actual) * 100).toFixed(2)}%` : "0.00%";
+    totals.actual > 0
+      ? `${((totals.reject / totals.actual) * 100).toFixed(2)}%`
+      : "0.00%";
+
+  const appliedRangeText =
+    fromDate || toDate
+      ? `${fromDate ? formatShortDate(fromDate) : "Start"} - ${toDate ? formatShortDate(toDate) : "End"}`
+      : "All dates";
+
+  const handleResetDateFilter = () => {
+    setFromDate("");
+    setToDate("");
+  };
+
+  const scrollableWidth = getScrollableChartWidth(chartData.length, range);
+  const xAxisInterval = getXAxisInterval(chartData.length, range);
+  const xAxisAngle = getXAxisAngle(chartData.length, range);
+  const xAxisHeight = getXAxisHeight(chartData.length, range);
+  const showDots = shouldShowDots(chartData.length, range);
+  const needsHorizontalScroll = range === "daily" && chartData.length > 7;
 
   return (
     <section className={`border p-5 ${t.sectionBg} ${t.border}`}>
@@ -316,13 +452,13 @@ export default function ProductionLineChart({
               {title}
             </h3>
             <p className={`mt-1 text-sm ${t.text}`}>
-              Daily, grouped multi-day, weekly aur monthly production trend overview.
+              Daily, grouped multi-day, weekly, and monthly production trend overview.
             </p>
           </div>
 
           {ignoreFilters ? (
             <div className={`border px-3 py-2 text-xs font-semibold ${t.legend}`}>
-              Full trend view, filter independent
+              Full trend view, independent of external filters
             </div>
           ) : null}
         </div>
@@ -341,6 +477,58 @@ export default function ProductionLineChart({
             </button>
           ))}
         </div>
+
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
+          <div className="md:col-span-1">
+            <label className={`mb-1 block text-[11px] font-bold uppercase tracking-[0.16em] ${t.muted}`}>
+              From Date
+            </label>
+            <input
+              type="date"
+              value={fromDate}
+              min={minAvailableDate || undefined}
+              max={toDate || maxAvailableDate || undefined}
+              onChange={(e) => setFromDate(e.target.value)}
+              className={`w-full border px-3 py-2 text-sm font-medium outline-none ${t.input}`}
+            />
+          </div>
+
+          <div className="md:col-span-1">
+            <label className={`mb-1 block text-[11px] font-bold uppercase tracking-[0.16em] ${t.muted}`}>
+              To Date
+            </label>
+            <input
+              type="date"
+              value={toDate}
+              min={fromDate || minAvailableDate || undefined}
+              max={maxAvailableDate || undefined}
+              onChange={(e) => setToDate(e.target.value)}
+              className={`w-full border px-3 py-2 text-sm font-medium outline-none ${t.input}`}
+            />
+          </div>
+
+          <div className="md:col-span-1">
+            <label className={`mb-1 block text-[11px] font-bold uppercase tracking-[0.16em] ${t.muted}`}>
+              Applied Range
+            </label>
+            <div className={`flex min-h-[42px] items-center border px-3 py-2 text-sm font-semibold ${t.legend}`}>
+              {appliedRangeText}
+            </div>
+          </div>
+
+          <div className="md:col-span-1">
+            <label className={`mb-1 block text-[11px] font-bold uppercase tracking-[0.16em] ${t.muted}`}>
+              Reset
+            </label>
+            <button
+              type="button"
+              onClick={handleResetDateFilter}
+              className={`w-full border px-3 py-2 text-xs font-bold uppercase tracking-[0.14em] transition ${t.tab}`}
+            >
+              Clear Date Filter
+            </button>
+          </div>
+        </div>
       </div>
 
       {chartData.length > 0 ? (
@@ -354,89 +542,117 @@ export default function ProductionLineChart({
             <StatCard label="Reject %" value={rejectPercent} color={t.reject} theme={theme} />
           </div>
 
-          <div className={`h-[360px] w-full border p-3 ${t.panelBg} ${t.border}`}>
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={chartData} margin={{ top: 10, right: 10, left: -10, bottom: 10 }}>
-                <CartesianGrid strokeDasharray="2 2" stroke={t.grid} />
+          <div className={`border p-3 ${t.panelBg} ${t.border}`}>
+            <div className="mb-2 flex items-center justify-between gap-3">
+              <p className={`text-xs font-semibold uppercase tracking-[0.14em] ${t.muted}`}>
+                Trend Chart
+              </p>
+              {needsHorizontalScroll ? (
+                <p className={`text-[11px] font-medium ${t.scrollHint}`}>
+                  Scroll horizontally to compare longer daily ranges
+                </p>
+              ) : null}
+            </div>
 
-                <XAxis
-                  dataKey="label"
-                  stroke={t.axis}
-                  tick={{ fill: t.axis, fontSize: 12 }}
-                  axisLine={{ stroke: t.grid }}
-                  tickLine={{ stroke: t.grid }}
-                  interval={0}
-                  angle={chartData.length > 7 ? -20 : 0}
-                  textAnchor={chartData.length > 7 ? "end" : "middle"}
-                  height={chartData.length > 7 ? 52 : 30}
-                />
+            <div className="overflow-x-auto overflow-y-hidden">
+              <div
+                style={{
+                  width:
+                    typeof scrollableWidth === "number"
+                      ? `${scrollableWidth}px`
+                      : scrollableWidth,
+                  minWidth: "100%",
+                  height: 360,
+                }}
+              >
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart
+                    data={chartData}
+                    margin={{ top: 10, right: 16, left: 0, bottom: 10 }}
+                  >
+                    <CartesianGrid strokeDasharray="2 2" stroke={t.grid} />
 
-                <YAxis
-                  stroke={t.axis}
-                  tick={{ fill: t.axis, fontSize: 12 }}
-                  axisLine={{ stroke: t.grid }}
-                  tickLine={{ stroke: t.grid }}
-                />
+                    <XAxis
+                      dataKey="label"
+                      stroke={t.axis}
+                      tick={{ fill: t.axis, fontSize: 12 }}
+                      axisLine={{ stroke: t.grid }}
+                      tickLine={{ stroke: t.grid }}
+                      interval={xAxisInterval}
+                      angle={xAxisAngle}
+                      textAnchor={xAxisAngle < 0 ? "end" : "middle"}
+                      height={xAxisHeight}
+                    />
 
-                <Tooltip content={<CustomTooltip theme={theme} />} />
-                <Legend content={<CustomLegend theme={theme} />} />
+                    <YAxis
+                      stroke={t.axis}
+                      tick={{ fill: t.axis, fontSize: 12 }}
+                      axisLine={{ stroke: t.grid }}
+                      tickLine={{ stroke: t.grid }}
+                    />
 
-                <Line
-                  type="monotone"
-                  dataKey="actual"
-                  name="Actual"
-                  stroke={t.actual}
-                  strokeWidth={2.5}
-                  dot={{ r: 3, strokeWidth: 0, fill: t.actual }}
-                  activeDot={{ r: 5 }}
-                />
+                    <Tooltip content={<CustomTooltip theme={theme} />} />
+                    <Legend content={<CustomLegend theme={theme} />} />
 
-                <Line
-                  type="monotone"
-                  dataKey="good"
-                  name="Good"
-                  stroke={t.good}
-                  strokeWidth={2.2}
-                  dot={{ r: 3, strokeWidth: 0, fill: t.good }}
-                  activeDot={{ r: 5 }}
-                />
+                    <Line
+                      type="monotone"
+                      dataKey="actual"
+                      name="Actual"
+                      stroke={t.actual}
+                      strokeWidth={2.5}
+                      dot={showDots ? { r: 3, strokeWidth: 0, fill: t.actual } : false}
+                      activeDot={{ r: 5 }}
+                    />
 
-                <Line
-                  type="monotone"
-                  dataKey="reject"
-                  name="Reject"
-                  stroke={t.reject}
-                  strokeWidth={2.2}
-                  dot={{ r: 3, strokeWidth: 0, fill: t.reject }}
-                  activeDot={{ r: 5 }}
-                />
+                    <Line
+                      type="monotone"
+                      dataKey="good"
+                      name="Good"
+                      stroke={t.good}
+                      strokeWidth={2.2}
+                      dot={showDots ? { r: 3, strokeWidth: 0, fill: t.good } : false}
+                      activeDot={{ r: 5 }}
+                    />
 
-                <Line
-                  type="monotone"
-                  dataKey="target"
-                  name="Target"
-                  stroke={t.target}
-                  strokeWidth={2}
-                  strokeDasharray="4 4"
-                  dot={false}
-                />
+                    <Line
+                      type="monotone"
+                      dataKey="reject"
+                      name="Reject"
+                      stroke={t.reject}
+                      strokeWidth={2.2}
+                      dot={showDots ? { r: 3, strokeWidth: 0, fill: t.reject } : false}
+                      activeDot={{ r: 5 }}
+                    />
 
-                <Line
-                  type="monotone"
-                  dataKey="lossTime"
-                  name="Loss Time"
-                  stroke={t.lossTime}
-                  strokeWidth={2}
-                  dot={{ r: 2.5, strokeWidth: 0, fill: t.lossTime }}
-                  activeDot={{ r: 4 }}
-                />
-              </LineChart>
-            </ResponsiveContainer>
+                    <Line
+                      type="monotone"
+                      dataKey="target"
+                      name="Target"
+                      stroke={t.target}
+                      strokeWidth={2}
+                      strokeDasharray="4 4"
+                      dot={false}
+                    />
+
+                    <Line
+                      type="monotone"
+                      dataKey="lossTime"
+                      name="Loss Time"
+                      stroke={t.lossTime}
+                      strokeWidth={2}
+                      dot={showDots ? { r: 2.5, strokeWidth: 0, fill: t.lossTime } : false}
+                      activeDot={{ r: 4 }}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
           </div>
 
           <div className={`mt-4 border px-4 py-3 ${t.softBg} ${t.border}`}>
             <p className={`text-sm leading-7 ${t.text}`}>
-              <span className="font-bold">Chart reading:</span> range switcher se tum daily noise aur grouped trend dono compare kar sakte ho; weekly aur monthly view long-term pattern samajhne ke liye zyada clean hota hai.
+              Select a date range first, then switch between daily or grouped views to compare the same period at different time resolutions.
+              Horizontal scrolling is enabled automatically for dense daily data.
             </p>
           </div>
         </>
@@ -447,7 +663,7 @@ export default function ProductionLineChart({
               No production trend data available
             </p>
             <p className={`mt-1 text-xs ${t.muted}`}>
-              Data add hone par trend chart yahan show hoga.
+              No data was found for the selected date range.
             </p>
           </div>
         </div>

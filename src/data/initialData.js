@@ -2,48 +2,33 @@ export const STORAGE_KEY = "production-dashboard-live-data";
 
 export const initialDashboardData = {
   summary: {
-    totalProduction: 12450,
-    goodProduction: 11980,
-    rejection: 470,
-    rejectionPercent: "3.77%",
+    totalProduction: 0,
+    goodProduction: 0,
+    rejection: 0,
+    rejectionPercent: "0%",
   },
 
   dayWiseTrend: [
-    { date: "01 Jun", production: 2100, rejection: 80 },
-    { date: "02 Jun", production: 2300, rejection: 65 },
-    { date: "03 Jun", production: 2200, rejection: 90 },
-    { date: "04 Jun", production: 2450, rejection: 70 },
-    { date: "05 Jun", production: 2400, rejection: 85 },
+    { date: "01 Jun", production: 0, rejection: 0 },
+    { date: "02 Jun", production: 0, rejection: 0 },
+    { date: "03 Jun", production: 0, rejection: 0 },
+    { date: "04 Jun", production: 0, rejection: 0 },
+    { date: "05 Jun", production: 0, rejection: 0 },
   ],
 
   shiftWiseProduction: [
-    { shift: "Shift A", actual: 4200, rejection: 110 },
-    { shift: "Shift B", actual: 3980, rejection: 140 },
-    { shift: "Shift C", actual: 4270, rejection: 220 },
+    { shift: "Shift A", actual: 0, rejection: 0 },
+    { shift: "Shift B", actual: 0, rejection: 0 },
+    { shift: "Shift C", actual: 0, rejection: 0 },
   ],
 
   rejectionBreakdown: [
-    { reason: "Short Fill", value: 120 },
-    { reason: "Power Cut", value: 70 },
-    { reason: "Scratch", value: 95 },
-    { reason: "Dent", value: 80 },
-    { reason: "Black Dot", value: 105 },
+    { reason: "Short Fill", value: 0 },
+    { reason: "Power Cut", value: 0 },
+    { reason: "Scratch", value: 0 },
+    { reason: "Dent", value: 0 },
+    { reason: "Black Dot", value: 0 },
   ],
 
-  hourlyTable: [
-    {
-      date: "2026-06-10",
-      hall: "Hall 1",
-      machine: "M-01",
-      shift: "A",
-      hour: "06-07",
-      part: "Base Knob",
-      actual: 120,
-      good: 115,
-      reject: 5,
-      operator: "Ravi",
-      rejectReason: "Short Fill",
-      remarks: "",
-    },
-  ],
+  hourlyTable: [],
 };

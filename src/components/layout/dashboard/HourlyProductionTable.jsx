@@ -8,6 +8,9 @@ const initialFilters = {
   machine: "",
   shift: "",
   rejectReason: "",
+  lossReason: "",
+  person: "",
+  department: "",
 };
 
 const REJECT_REASONS = [
@@ -23,6 +26,28 @@ const REJECT_REASONS = [
   "Weld Line",
 ];
 
+const LOSS_REASONS = [
+  "Breakdown - Machine Breakdown",
+  "Breakdown - Mould Breakdown",
+  "Breakdown - Process Trouble",
+  "Setup / Adjustment - Mould Change",
+  "Tool Change - Mould Polishing / Cleaning",
+  "Tool Change - Nozzle Change",
+  "Tool Change - Insert / Ejector Pin / Slider Pin / Spring / Coupler / Copper Electrode Change",
+  "Start-up Loss - Shift Start Delay",
+  "Minor Stoppages - Under 10 Min",
+  "Speed Loss - Unskilled Manpower / Actual Speed Low",
+  "Defect & Rework Loss",
+  "Schedule Down Time - Planned Stoppage",
+  "Management Loss - No Manpower",
+  "Management Loss - No Power",
+  "Management Loss - Raw Material Shortage",
+  "Management Loss - Conveyor Stop",
+  "Management Loss - Bin / Trolly Short",
+  "Operating Motion Loss",
+  "Other",
+];
+
 const normalizeTextValue = (value) =>
   String(value || "")
     .trim()
@@ -34,38 +59,29 @@ const REJECT_REASON_ALIASES = {
   "short molding": "Short Moulding",
   "short fill": "Short Moulding",
   "short shot": "Short Moulding",
-
   "silver mark": "Silver Mark",
   "silver marks": "Silver Mark",
-
   "black spot": "Black Spot",
   "black dot": "Black Spot",
   "black mark": "Black Spot",
-
   "colour change": "Colour Change",
   "color change": "Colour Change",
   "colour variation": "Colour Change",
   "color variation": "Colour Change",
-
   warpage: "Warpage",
   "warp age": "Warpage",
-
   "flow mark": "Flow Mark",
   "flow marks": "Flow Mark",
   "cut mark": "Flow Mark",
   "cut marks": "Flow Mark",
-
   shrinkage: "Shrinkage",
   shrink: "Shrinkage",
-
   mixing: "Mixing",
   micing: "Mixing",
   "material mixing": "Mixing",
-
   "burn mark": "Burn Mark",
   "burn marks": "Burn Mark",
   burn: "Burn Mark",
-
   "weld line": "Weld Line",
   "weld lines": "Weld Line",
 };
@@ -180,6 +196,16 @@ const formatResponsiblePersons = (row) => {
   return "";
 };
 
+const formatDepartments = (row) => {
+  const rows = Array.isArray(row.lossTimeBreakdown)
+    ? row.lossTimeBreakdown
+    : Array.isArray(row.responsibilities)
+    ? row.responsibilities
+    : [];
+
+  return [...new Set(rows.map((item) => item?.department).filter(Boolean))].join(", ");
+};
+
 const formatLossTimeBreakdown = (row) => {
   if (row.lossTimeBreakdownText) return String(row.lossTimeBreakdownText);
 
@@ -188,12 +214,18 @@ const formatLossTimeBreakdown = (row) => {
       .map((item) => {
         const reason = item?.reason || "Unknown";
         const qty = Number(item?.qty || 0);
+        const minutes = Number(item?.minutes || 0);
         const person = item?.person
           ? item?.department
             ? ` - ${item.person} (${item.department})`
             : ` - ${item.person}`
           : "";
-        return `${reason}: ${qty}${person}`;
+
+        const metric = [`Qty ${qty}`, minutes > 0 ? `${minutes} min` : ""]
+          .filter(Boolean)
+          .join(", ");
+
+        return `${reason}: ${metric}${person}`;
       })
       .join(", ");
   }
@@ -249,6 +281,44 @@ const getReasonTotals = (rows) => {
   );
 };
 
+const getLossReasonWise = (row) => {
+  const base = LOSS_REASONS.reduce((acc, reason) => {
+    acc[reason] = { qty: 0, minutes: 0 };
+    return acc;
+  }, {});
+
+  const lossRows = Array.isArray(row.lossTimeBreakdown)
+    ? row.lossTimeBreakdown
+    : Array.isArray(row.responsibilities)
+    ? row.responsibilities
+    : [];
+
+  lossRows.forEach((item) => {
+    const reason = String(item?.reason || "").trim();
+    if (!reason) return;
+
+    if (!base[reason]) {
+      base[reason] = { qty: 0, minutes: 0 };
+    }
+
+    base[reason].qty += Number(item?.qty || 0);
+    base[reason].minutes += Number(item?.minutes || 0);
+  });
+
+  return base;
+};
+
+const getLossReasonTotals = (rows) => {
+  return rows.reduce((acc, row) => {
+    Object.entries(row.lossReasonWise || {}).forEach(([reason, metric]) => {
+      if (!acc[reason]) acc[reason] = { qty: 0, minutes: 0 };
+      acc[reason].qty += Number(metric?.qty || 0);
+      acc[reason].minutes += Number(metric?.minutes || 0);
+    });
+    return acc;
+  }, {});
+};
+
 const getMachineDisplay = (row) => {
   if (typeof row.machineDisplayName === "string" && row.machineDisplayName.trim()) {
     return row.machineDisplayName;
@@ -275,6 +345,13 @@ export default function HourlyProductionTable({ rows = [] }) {
           ? row.rejectBreakdown
           : parseRejectBreakdownText(row.rejectBreakdownText || "");
 
+      const parsedLossBreakdown =
+        Array.isArray(row.lossTimeBreakdown) && row.lossTimeBreakdown.length
+          ? row.lossTimeBreakdown
+          : Array.isArray(row.responsibilities) && row.responsibilities.length
+          ? row.responsibilities
+          : [];
+
       const reject =
         row.reject !== undefined && row.reject !== null
           ? Number(row.reject ?? 0)
@@ -283,15 +360,26 @@ export default function HourlyProductionTable({ rows = [] }) {
       const good = Number(row.good ?? Math.max(actual - reject, 0));
       const lossTime = Number(row.lossTime ?? Math.max(target - actual, 0));
 
+      const lossMinutes =
+        row.lossTimeMinutes !== undefined && row.lossTimeMinutes !== null
+          ? Number(row.lossTimeMinutes ?? 0)
+          : parsedLossBreakdown.reduce((sum, item) => sum + Number(item.minutes || 0), 0);
+
       const reasonWiseRejects = getReasonWiseRejects({
         ...row,
         rejectBreakdown: parsedRejectBreakdown,
         reject,
       });
 
+      const lossReasonWise = getLossReasonWise({
+        ...row,
+        lossTimeBreakdown: parsedLossBreakdown,
+      });
+
       return {
         ...row,
         rejectBreakdown: parsedRejectBreakdown,
+        lossTimeBreakdown: parsedLossBreakdown,
         machineDisplay: getMachineDisplay(row),
         normalizedDate: normalizeDate(row.date),
         normalizedShift: normalizeShift(row.shiftLabel || row.shift),
@@ -299,14 +387,26 @@ export default function HourlyProductionTable({ rows = [] }) {
           ...row,
           rejectBreakdown: parsedRejectBreakdown,
         }),
-        responsiblePersonsTextFormatted: formatResponsiblePersons(row),
-        lossTimeBreakdownTextFormatted: formatLossTimeBreakdown(row),
+        responsiblePersonsTextFormatted: formatResponsiblePersons({
+          ...row,
+          lossTimeBreakdown: parsedLossBreakdown,
+        }),
+        departmentsTextFormatted: formatDepartments({
+          ...row,
+          lossTimeBreakdown: parsedLossBreakdown,
+        }),
+        lossTimeBreakdownTextFormatted: formatLossTimeBreakdown({
+          ...row,
+          lossTimeBreakdown: parsedLossBreakdown,
+        }),
         reasonWiseRejects,
+        lossReasonWise,
         target,
         actual,
         good,
         reject,
         lossTime,
+        lossMinutes,
         isNewOperator: Boolean(row.isNewOperator),
       };
     });
@@ -328,6 +428,9 @@ export default function HourlyProductionTable({ rows = [] }) {
     const searchText = filters.search.trim().toLowerCase();
     const filterDate = filters.date.trim().toLowerCase();
     const filterRejectReason = filters.rejectReason.trim().toLowerCase();
+    const filterLossReason = filters.lossReason.trim().toLowerCase();
+    const filterPerson = filters.person.trim().toLowerCase();
+    const filterDepartment = filters.department.trim().toLowerCase();
 
     return normalizedRows.filter((row) => {
       const date = String(row.normalizedDate || row.date || "").toLowerCase();
@@ -344,6 +447,7 @@ export default function HourlyProductionTable({ rows = [] }) {
       const rejectBreakdown = String(row.rejectBreakdownTextFormatted || "").toLowerCase();
       const lossTimeBreakdown = String(row.lossTimeBreakdownTextFormatted || "").toLowerCase();
       const responsiblePersons = String(row.responsiblePersonsTextFormatted || "").toLowerCase();
+      const departments = String(row.departmentsTextFormatted || "").toLowerCase();
       const remarks = String(row.remarks || "").toLowerCase();
       const createdAt = String(row.createdAt || "").toLowerCase();
       const newOperatorStatus = row.isNewOperator ? "yes new operator" : "existing operator";
@@ -365,6 +469,7 @@ export default function HourlyProductionTable({ rows = [] }) {
           rejectBreakdown,
           lossTimeBreakdown,
           responsiblePersons,
+          departments,
           remarks,
           createdAt,
           newOperatorStatus,
@@ -374,10 +479,20 @@ export default function HourlyProductionTable({ rows = [] }) {
       const matchesHall = !filters.hall || hall === filters.hall.toLowerCase();
       const matchesMachine = !filters.machine || machine === filters.machine.toLowerCase();
       const matchesShift = !filters.shift || shift === filters.shift.toLowerCase();
+
       const matchesRejectReason =
         !filterRejectReason ||
         rejectReason.includes(filterRejectReason) ||
         rejectBreakdown.includes(filterRejectReason);
+
+      const matchesLossReason =
+        !filterLossReason || lossTimeBreakdown.includes(filterLossReason);
+
+      const matchesPerson =
+        !filterPerson || responsiblePersons.includes(filterPerson);
+
+      const matchesDepartment =
+        !filterDepartment || departments.includes(filterDepartment);
 
       return (
         matchesSearch &&
@@ -385,7 +500,10 @@ export default function HourlyProductionTable({ rows = [] }) {
         matchesHall &&
         matchesMachine &&
         matchesShift &&
-        matchesRejectReason
+        matchesRejectReason &&
+        matchesLossReason &&
+        matchesPerson &&
+        matchesDepartment
       );
     });
   }, [normalizedRows, filters]);
@@ -398,14 +516,16 @@ export default function HourlyProductionTable({ rows = [] }) {
         acc.good += row.good;
         acc.reject += row.reject;
         acc.lossTime += row.lossTime;
+        acc.lossMinutes += row.lossMinutes;
         return acc;
       },
-      { target: 0, actual: 0, good: 0, reject: 0, lossTime: 0 }
+      { target: 0, actual: 0, good: 0, reject: 0, lossTime: 0, lossMinutes: 0 }
     );
 
     return {
       ...base,
       reasonWiseRejects: getReasonTotals(filteredRows),
+      lossReasonWiseTotals: getLossReasonTotals(filteredRows),
     };
   }, [filteredRows]);
 
@@ -442,16 +562,23 @@ export default function HourlyProductionTable({ rows = [] }) {
         Actual: row.actual ?? 0,
         Good: row.good ?? 0,
         Reject: row.reject ?? 0,
-        "Loss Time": row.lossTime ?? 0,
+        "Loss Qty": row.lossTime ?? 0,
+        "Loss Minutes": row.lossMinutes ?? 0,
       };
 
       REJECT_REASONS.forEach((reason) => {
         base[reason] = row.reasonWiseRejects?.[reason] ?? 0;
       });
 
+      LOSS_REASONS.forEach((reason) => {
+        base[`${reason} Qty`] = row.lossReasonWise?.[reason]?.qty ?? 0;
+        base[`${reason} Min`] = row.lossReasonWise?.[reason]?.minutes ?? 0;
+      });
+
       base["Reject Breakdown"] = row.rejectBreakdownTextFormatted || "";
       base["Loss Time Breakdown"] = row.lossTimeBreakdownTextFormatted || "";
       base["Responsible Persons"] = row.responsiblePersonsTextFormatted || "";
+      base["Departments"] = row.departmentsTextFormatted || "";
       base["Reject %"] =
         row.actual > 0 ? `${((row.reject / row.actual) * 100).toFixed(2)}%` : "0.00%";
       base.Remarks = row.remarks || "";
@@ -477,10 +604,12 @@ export default function HourlyProductionTable({ rows = [] }) {
       Actual: totals.actual,
       Good: totals.good,
       Reject: totals.reject,
-      "Loss Time": totals.lossTime,
+      "Loss Qty": totals.lossTime,
+      "Loss Minutes": totals.lossMinutes,
       "Reject Breakdown": `Reject %: ${rejectPercent}%`,
       "Loss Time Breakdown": "",
       "Responsible Persons": "",
+      Departments: "",
       "Reject %": `${rejectPercent}%`,
       Remarks: `Rows: ${filteredRows.length}`,
       "Created At": "",
@@ -490,17 +619,23 @@ export default function HourlyProductionTable({ rows = [] }) {
       summary[reason] = totals.reasonWiseRejects[reason];
     });
 
+    LOSS_REASONS.forEach((reason) => {
+      summary[`${reason} Qty`] = totals.lossReasonWiseTotals?.[reason]?.qty ?? 0;
+      summary[`${reason} Min`] = totals.lossReasonWiseTotals?.[reason]?.minutes ?? 0;
+    });
+
     excelData.push({});
     excelData.push(summary);
 
     const worksheet = XLSX.utils.json_to_sheet(excelData);
+
     worksheet["!cols"] = [
       { wch: 8 },
       { wch: 15 },
+      { wch: 18 },
+      { wch: 34 },
       { wch: 16 },
-      { wch: 30 },
-      { wch: 16 },
-      { wch: 24 },
+      { wch: 28 },
       { wch: 10 },
       { wch: 18 },
       { wch: 28 },
@@ -511,11 +646,14 @@ export default function HourlyProductionTable({ rows = [] }) {
       { wch: 12 },
       { wch: 12 },
       { wch: 12 },
+      { wch: 12 },
       { wch: 14 },
       ...REJECT_REASONS.map(() => ({ wch: 18 })),
+      ...LOSS_REASONS.flatMap(() => [{ wch: 18 }, { wch: 18 }]),
       { wch: 46 },
-      { wch: 58 },
+      { wch: 60 },
       { wch: 40 },
+      { wch: 26 },
       { wch: 12 },
       { wch: 28 },
       { wch: 24 },
@@ -539,7 +677,7 @@ export default function HourlyProductionTable({ rows = [] }) {
         id="hourly-production-report"
         className="print-section border border-slate-300 bg-white p-4 md:p-6"
       >
-        <div className="no-print mb-6 flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+        <div className="no-print mb-6 flex flex-col gap-4 2xl:flex-row 2xl:items-start 2xl:justify-between">
           <div className="min-w-0">
             <div className="inline-flex border border-slate-300 bg-slate-100 px-2 py-1 text-[11px] font-bold uppercase tracking-[0.18em] text-slate-700">
               Production Analytics
@@ -547,12 +685,12 @@ export default function HourlyProductionTable({ rows = [] }) {
             <h2 className="mt-3 text-xl font-bold tracking-tight text-slate-900 md:text-2xl">
               Hourly Production Report
             </h2>
-            <p className="mt-1 max-w-2xl text-sm text-slate-600">
-              Hall, machine, shift, part, operator, loss time aur expanded reason-wise rejection reporting.
+            <p className="mt-1 max-w-3xl text-sm text-slate-600">
+              Hall, machine, shift, part, operator, reject, loss qty, loss minutes aur reason-wise detailed reporting.
             </p>
           </div>
 
-          <div className="grid w-full grid-cols-1 gap-2 sm:grid-cols-3 xl:w-auto">
+          <div className="grid w-full grid-cols-1 gap-2 sm:grid-cols-3 2xl:w-auto">
             <div className="flex min-h-[44px] items-center justify-center border border-slate-300 bg-slate-100 px-4 py-2 text-xs font-bold uppercase tracking-[0.16em] text-slate-700">
               Total Rows: {filteredRows.length}
             </div>
@@ -577,12 +715,13 @@ export default function HourlyProductionTable({ rows = [] }) {
           </div>
         </div>
 
-        <div className="no-print mb-5 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+        <div className="no-print mb-5 grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-7">
           <SummaryCard label="Target" value={formatNumber(totals.target)} tone="slate" />
           <SummaryCard label="Actual" value={formatNumber(totals.actual)} tone="blue" />
           <SummaryCard label="Good" value={formatNumber(totals.good)} tone="emerald" />
           <SummaryCard label="Reject" value={formatNumber(totals.reject)} tone="rose" />
-          <SummaryCard label="Loss Time" value={formatNumber(totals.lossTime)} tone="amber" />
+          <SummaryCard label="Loss Qty" value={formatNumber(totals.lossTime)} tone="amber" />
+          <SummaryCard label="Loss Min" value={formatNumber(totals.lossMinutes)} tone="amber" />
           <SummaryCard label="Reject %" value={`${rejectPercent}%`} tone="neutral" />
         </div>
 
@@ -605,7 +744,7 @@ export default function HourlyProductionTable({ rows = [] }) {
                 Filters
               </h3>
               <p className="mt-1 text-xs text-slate-500">
-                Search and narrow production records quickly.
+                Search and narrow production, reject and loss records quickly.
               </p>
             </div>
 
@@ -618,14 +757,14 @@ export default function HourlyProductionTable({ rows = [] }) {
             </button>
           </div>
 
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-6">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-8">
             <FilterInput label="Search" className="xl:col-span-2">
               <input
                 type="text"
                 name="search"
                 value={filters.search}
                 onChange={handleFilterChange}
-                placeholder="Machine, part, operator, loss time..."
+                placeholder="Machine, part, operator, loss..."
                 className="filter-input"
               />
             </FilterInput>
@@ -694,7 +833,40 @@ export default function HourlyProductionTable({ rows = [] }) {
                 name="rejectReason"
                 value={filters.rejectReason}
                 onChange={handleFilterChange}
-                placeholder="Short Moulding, Weld Line..."
+                placeholder="Short Moulding..."
+                className="filter-input"
+              />
+            </FilterInput>
+
+            <FilterInput label="Loss Reason">
+              <input
+                type="text"
+                name="lossReason"
+                value={filters.lossReason}
+                onChange={handleFilterChange}
+                placeholder="Machine Breakdown..."
+                className="filter-input"
+              />
+            </FilterInput>
+
+            <FilterInput label="Person">
+              <input
+                type="text"
+                name="person"
+                value={filters.person}
+                onChange={handleFilterChange}
+                placeholder="Responsible person"
+                className="filter-input"
+              />
+            </FilterInput>
+
+            <FilterInput label="Department">
+              <input
+                type="text"
+                name="department"
+                value={filters.department}
+                onChange={handleFilterChange}
+                placeholder="Department"
                 className="filter-input"
               />
             </FilterInput>
@@ -702,14 +874,14 @@ export default function HourlyProductionTable({ rows = [] }) {
         </div>
 
         <div className="table-scroll-wrap border border-slate-300 bg-white">
-          <table className="printable-table min-w-[5200px] table-fixed text-sm">
+          <table className="printable-table min-w-[7600px] table-fixed text-sm">
             <thead className="print:bg-transparent">
               <tr className="border-b border-slate-400 text-slate-800">
                 <TableHead className="w-[130px]">Date</TableHead>
                 <TableHead className="w-[110px]">Hall</TableHead>
-                <TableHead className="w-[240px]">Machine Display</TableHead>
+                <TableHead className="w-[260px]">Machine Display</TableHead>
                 <TableHead className="w-[130px]">Machine Code</TableHead>
-                <TableHead className="w-[220px]">Machine Name</TableHead>
+                <TableHead className="w-[240px]">Machine Name</TableHead>
                 <TableHead className="w-[80px]">Shift</TableHead>
                 <TableHead className="w-[150px]">Hour</TableHead>
                 <TableHead className="w-[220px]">Part</TableHead>
@@ -720,7 +892,8 @@ export default function HourlyProductionTable({ rows = [] }) {
                 <TableHead className="w-[100px]">Actual</TableHead>
                 <TableHead className="w-[100px]">Good</TableHead>
                 <TableHead className="w-[100px]">Reject</TableHead>
-                <TableHead className="w-[120px]">Loss Time</TableHead>
+                <TableHead className="w-[110px]">Loss Qty</TableHead>
+                <TableHead className="w-[120px]">Loss Min</TableHead>
 
                 {REJECT_REASONS.map((reason) => (
                   <TableHead key={reason} className="w-[140px]">
@@ -729,8 +902,9 @@ export default function HourlyProductionTable({ rows = [] }) {
                 ))}
 
                 <TableHead className="w-[340px]">Reject Breakdown</TableHead>
-                <TableHead className="w-[420px]">Loss Time Breakdown</TableHead>
+                <TableHead className="w-[460px]">Loss Time Breakdown</TableHead>
                 <TableHead className="w-[300px]">Responsible Persons</TableHead>
+                <TableHead className="w-[220px]">Departments</TableHead>
                 <TableHead className="w-[110px]">Reject %</TableHead>
                 <TableHead className="w-[260px]">Remarks</TableHead>
                 <TableHead className="w-[220px]">Created At</TableHead>
@@ -780,6 +954,9 @@ export default function HourlyProductionTable({ rows = [] }) {
                       <TableCell className="font-bold text-amber-700 print:text-slate-900">
                         {formatNumber(row.lossTime)}
                       </TableCell>
+                      <TableCell className="font-bold text-amber-700 print:text-slate-900">
+                        {formatNumber(row.lossMinutes)}
+                      </TableCell>
 
                       {REJECT_REASONS.map((reason) => (
                         <TableCell key={reason}>
@@ -790,6 +967,7 @@ export default function HourlyProductionTable({ rows = [] }) {
                       <TableCell clamp>{row.rejectBreakdownTextFormatted || "-"}</TableCell>
                       <TableCell clamp>{row.lossTimeBreakdownTextFormatted || "-"}</TableCell>
                       <TableCell clamp>{row.responsiblePersonsTextFormatted || "-"}</TableCell>
+                      <TableCell clamp>{row.departmentsTextFormatted || "-"}</TableCell>
                       <TableCell className="font-semibold text-amber-700 print:text-slate-900">
                         {rowRejectPercent}%
                       </TableCell>
@@ -804,7 +982,7 @@ export default function HourlyProductionTable({ rows = [] }) {
                 })
               ) : (
                 <tr>
-                  <td colSpan={22 + REJECT_REASONS.length} className="px-4 py-10 text-center">
+                  <td colSpan={24 + REJECT_REASONS.length} className="px-4 py-10 text-center">
                     <div className="border border-dashed border-slate-300 bg-slate-50 px-4 py-8">
                       <p className="text-sm font-semibold text-slate-700">
                         No production entries found
@@ -838,6 +1016,9 @@ export default function HourlyProductionTable({ rows = [] }) {
                   <td className="px-4 py-3 font-bold text-amber-700">
                     {formatNumber(totals.lossTime)}
                   </td>
+                  <td className="px-4 py-3 font-bold text-amber-700">
+                    {formatNumber(totals.lossMinutes)}
+                  </td>
 
                   {REJECT_REASONS.map((reason) => (
                     <td key={reason} className="px-4 py-3 font-bold">
@@ -848,6 +1029,7 @@ export default function HourlyProductionTable({ rows = [] }) {
                   <td className="px-4 py-3 font-semibold text-amber-700">
                     Reject %: {rejectPercent}%
                   </td>
+                  <td className="px-4 py-3 text-slate-700">-</td>
                   <td className="px-4 py-3 text-slate-700">-</td>
                   <td className="px-4 py-3 text-slate-700">-</td>
                   <td className="px-4 py-3 font-semibold text-amber-700">{rejectPercent}%</td>
@@ -864,7 +1046,7 @@ export default function HourlyProductionTable({ rows = [] }) {
         .filter-input {
           width: 100%;
           min-width: 0;
-          height: 44px;
+          height: 46px;
           border-radius: 0;
           border: 1px solid rgb(148 163 184);
           background: white;
@@ -888,18 +1070,18 @@ export default function HourlyProductionTable({ rows = [] }) {
           width: 100%;
           max-width: 100%;
           overflow: auto;
-          height: calc(100vh - 160px);
-          min-height: 640px;
-          max-height: 1000px;
+          height: calc(100vh - 150px);
+          min-height: 700px;
+          max-height: 1050px;
         }
 
         .line-clamp-2-custom {
           display: -webkit-box;
-          -webkit-line-clamp: 3;
+          -webkit-line-clamp: 4;
           -webkit-box-orient: vertical;
           overflow: hidden;
           line-height: 1.35rem;
-          max-height: 4.05rem;
+          max-height: 5.4rem;
         }
 
         .table-cell-fixed {
@@ -922,6 +1104,14 @@ export default function HourlyProductionTable({ rows = [] }) {
           bottom: 0;
           z-index: 1;
           background: rgb(241 245 249);
+        }
+
+        @media (max-width: 1536px) {
+          .table-scroll-wrap {
+            height: 820px;
+            min-height: 560px;
+            max-height: 820px;
+          }
         }
 
         @media (max-width: 1280px) {
@@ -950,12 +1140,17 @@ export default function HourlyProductionTable({ rows = [] }) {
           .table-cell-fixed {
             padding: 0.75rem 0.625rem;
           }
+
+          .line-clamp-2-custom {
+            -webkit-line-clamp: 5;
+            max-height: 6.75rem;
+          }
         }
 
         @media print {
           @page {
             size: landscape;
-            margin: 10mm;
+            margin: 8mm;
           }
 
           body * {
@@ -994,7 +1189,7 @@ export default function HourlyProductionTable({ rows = [] }) {
             width: 100%;
             min-width: 100% !important;
             border-collapse: collapse;
-            font-size: 10px;
+            font-size: 9px;
           }
 
           .printable-table th,
