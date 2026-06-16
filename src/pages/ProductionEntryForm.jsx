@@ -1081,31 +1081,27 @@ export default function ProductionEntryForm() {
 
     setSubmitError("");
     setSubmitSuccess("");
+const payload = {
+  date: form.date?.trim(),
+  hall: form.hall?.trim(),
+  machineCode: form.machineCode?.trim(),
+  machineName: form.machineName?.trim(),
+  machineDisplayName: form.machineDisplayName?.trim(),
+  shift: form.shift?.trim(),
+  duration: form.duration?.trim(),
+  operatorId: form.operatorId?.trim(),
+  operator: form.operator?.trim(),
+  part: form.part?.trim(),
+  target: Number(form.target || 0),
+  actual: Number(form.actual || 0),
+  good: Number(form.good || 0),
+  reject: Number(form.reject || 0),
 
-    const payload = {
-      date: form.date?.trim(),
-      hall: form.hall?.trim(),
-      machineCode: form.machineCode?.trim(),
-      machineName: form.machineName?.trim(),
-      machineDisplayName: form.machineDisplayName?.trim(),
-      shift: form.shift?.trim(),
-      duration: form.duration?.trim(),
-      operatorId: form.operatorId?.trim(),
-      operator: form.operator?.trim(),
-      part: form.part?.trim(),
-      target: Number(form.target || 0),
-      actual: Number(form.actual || 0),
-      good: Number(form.good || 0),
-      reject: Number(form.reject || 0),
+  lossMinutes: Number(form.lossTimeMinutes || 0),
 
-      // Fix
-      lossMinutes: Number(form.lossTimeMinutes || 0),
-
-      rejectReason: form.rejectReason?.trim() || "",
-      remarks: form.remarks?.trim() || "",
-      createdAt: new Date().toISOString(),
-    };
-
+  rejectReason: form.rejectReason?.trim() || "",
+  remarks: form.remarks?.trim() || "",
+};
     if (
       !payload.date ||
       !payload.hall ||
