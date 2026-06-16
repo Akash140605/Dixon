@@ -9,7 +9,7 @@ export default defineConfig({
     port: 5173,
     proxy: {
       "/api": {
-        target: "http://localhost",
+        target: "http://kushalyouth.com",
         changeOrigin: true,
         secure: false,
       },

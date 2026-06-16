@@ -1074,107 +1074,91 @@ export default function ProductionEntryForm() {
   const [submitError, setSubmitError] = useState("");
   const [submitSuccess, setSubmitSuccess] = useState("");
 
-async function handleSubmit(e) {
-  e.preventDefault();
+  async function handleSubmit(e) {
+    e.preventDefault();
 
-  if (isSubmitting) return;
+    if (isSubmitting) return;
 
-  setSubmitError("");
-  setSubmitSuccess("");
+    setSubmitError("");
+    setSubmitSuccess("");
 
-  const payload = {
-    date: form.date?.trim(),
-    hall: form.hall?.trim(),
-    machineCode: form.machineCode?.trim(),
-    machineName: form.machineName?.trim(),
-    machineDisplayName: form.machineDisplayName?.trim(),
-    shift: form.shift?.trim(),
-    duration: form.duration?.trim(),
-    operatorId: form.operatorId?.trim(),
-    operator: form.operator?.trim(),
-    part: form.part?.trim(),
-    target: Number(form.target || 0),
-    actual: Number(form.actual || 0),
-    good: Number(form.good || 0),
-    reject: Number(form.reject || 0),
+    const payload = {
+      date: form.date?.trim(),
+      hall: form.hall?.trim(),
+      machineCode: form.machineCode?.trim(),
+      machineName: form.machineName?.trim(),
+      machineDisplayName: form.machineDisplayName?.trim(),
+      shift: form.shift?.trim(),
+      duration: form.duration?.trim(),
+      operatorId: form.operatorId?.trim(),
+      operator: form.operator?.trim(),
+      part: form.part?.trim(),
+      target: Number(form.target || 0),
+      actual: Number(form.actual || 0),
+      good: Number(form.good || 0),
+      reject: Number(form.reject || 0),
 
-    // Fix
-    lossMinutes: Number(form.lossTimeMinutes || 0),
+      // Fix
+      lossMinutes: Number(form.lossTimeMinutes || 0),
 
-    rejectReason: form.rejectReason?.trim() || "",
-    remarks: form.remarks?.trim() || "",
-    createdAt: new Date().toISOString(),
-  };
+      rejectReason: form.rejectReason?.trim() || "",
+      remarks: form.remarks?.trim() || "",
+      createdAt: new Date().toISOString(),
+    };
 
-  if (
-    !payload.date ||
-    !payload.hall ||
-    !payload.machineCode ||
-    !payload.shift
-  ) {
-    const msg = "Date, Hall, Machine and Shift are required.";
+    if (
+      !payload.date ||
+      !payload.hall ||
+      !payload.machineCode ||
+      !payload.shift
+    ) {
+      const msg = "Date, Hall, Machine and Shift are required.";
 
-    setSubmitError(msg);
+      setSubmitError(msg);
 
-    showToast(
-      "error",
-      "Validation Error",
-      msg
-    );
+      showToast("error", "Validation Error", msg);
 
-    return;
-  }
+      return;
+    }
 
-  try {
-    setIsSubmitting(true);
+    try {
+      setIsSubmitting(true);
 
-    const response = await fetch(
-      "http://localhost/api/entries.php",
-      {
+      const response = await fetch("http://kushalyouth.com/api/entries.php", {
         method: "POST",
         headers: {
           Accept: "application/json",
           "Content-Type": "application/json",
         },
         body: JSON.stringify(payload),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok || !result.success) {
+        throw new Error(result.message || "Failed to save data.");
       }
-    );
 
-    const result = await response.json();
+      setSubmitSuccess("Entry saved successfully.");
 
-    if (!response.ok || !result.success) {
-      throw new Error(
-        result.message || "Failed to save data."
+      showToast(
+        "success",
+        "Entry Saved",
+        "Production entry saved successfully.",
       );
+
+      // Form clear after save
+      handleReset();
+    } catch (error) {
+      const msg = error?.message || "Something went wrong while saving.";
+
+      setSubmitError(msg);
+
+      showToast("error", "Save Failed", msg);
+    } finally {
+      setIsSubmitting(false);
     }
-
-    setSubmitSuccess("Entry saved successfully.");
-
-    showToast(
-      "success",
-      "Entry Saved",
-      "Production entry saved successfully."
-    );
-
-    // Form clear after save
-    handleReset();
-
-  } catch (error) {
-    const msg =
-      error?.message ||
-      "Something went wrong while saving.";
-
-    setSubmitError(msg);
-
-    showToast(
-      "error",
-      "Save Failed",
-      msg
-    );
-  } finally {
-    setIsSubmitting(false);
   }
-}
   return (
     <div className="page-shell">
       <link
@@ -1770,40 +1754,34 @@ async function handleSubmit(e) {
             </div>
           </section>
 
-       {submitSuccess && (
-  <div className="success-message">
-    ✅ {submitSuccess}
-  </div>
-)}
+          {submitSuccess && (
+            <div className="success-message">✅ {submitSuccess}</div>
+          )}
 
-{submitError && (
-  <div className="error-message">
-    ❌ {submitError}
-  </div>
-)}
+          {submitError && <div className="error-message">❌ {submitError}</div>}
 
-<div className="action-row">
-  <button
-    type="submit"
-    className="primary-btn"
-    disabled={isSubmitting}
-  >
-    {isSubmitting
-      ? "Saving..."
-      : form.entryId
-      ? "Update Entry"
-      : "Save Entry"}
-  </button>
+          <div className="action-row">
+            <button
+              type="submit"
+              className="primary-btn"
+              disabled={isSubmitting}
+            >
+              {isSubmitting
+                ? "Saving..."
+                : form.entryId
+                  ? "Update Entry"
+                  : "Save Entry"}
+            </button>
 
-  <button
-    type="button"
-    onClick={handleReset}
-    className="secondary-btn"
-    disabled={isSubmitting}
-  >
-    Reset Form
-  </button>
-</div>
+            <button
+              type="button"
+              onClick={handleReset}
+              className="secondary-btn"
+              disabled={isSubmitting}
+            >
+              Reset Form
+            </button>
+          </div>
         </form>
       </div>
     </div>
