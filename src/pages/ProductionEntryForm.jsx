@@ -1138,17 +1138,36 @@ const payload = {
       if (!response.ok || !result.success) {
         throw new Error(result.message || "Failed to save data.");
       }
+setSubmitSuccess("Entry saved successfully.");
 
-      setSubmitSuccess("Entry saved successfully.");
+showToast(
+  "success",
+  "Entry Saved",
+  "Production entry saved successfully.",
+);
 
-      showToast(
-        "success",
-        "Entry Saved",
-        "Production entry saved successfully.",
-      );
+const nextSlot = getNextDurationSlot(form.duration);
 
+setForm((prev) =>
+  syncDerivedValues({
+    ...getInitialFormState(),
+
+    date: prev.date,
+    hall: prev.hall,
+
+    machine: prev.machine,
+    machineCode: prev.machineCode,
+    machineName: prev.machineName,
+    machineDisplayName: prev.machineDisplayName,
+
+    part: prev.part,
+
+    duration: nextSlot,
+    shift: getShiftByDuration(nextSlot),
+  })
+);
       // Form clear after save
-      handleReset();
+     
     } catch (error) {
       const msg = error?.message || "Something went wrong while saving.";
 
