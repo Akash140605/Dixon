@@ -159,6 +159,7 @@ function getLatestRow(rows = []) {
 
 function getRowIdentity(row) {
   return (
+    row?.entryId ||
     row?.id ||
     [
       row?.date || "",
@@ -690,7 +691,8 @@ export default function MachineDetailsView() {
         prefillFromMachineDetails: true,
         source: "machine-details-edit",
         isEditMode: true,
-        rowId: getRowIdentity(row),
+        rowId: row?.entryId || getRowIdentity(row),
+        entryId: row?.entryId || row?.id || getRowIdentity(row),
         originalRow: row,
         hall: resolvedHallLabel,
         hallLabel: resolvedHallLabel,
@@ -714,10 +716,13 @@ export default function MachineDetailsView() {
         actual: toNumber(row?.actual),
         good: toNumber(row?.good),
         reject: toNumber(row?.reject),
+        lossTime: toNumber(row?.lossTime ?? 0),
         lossMinutes: toNumber(
           row?.lossMinutes ?? row?.lossTimeMinutes ?? row?.lossTime ?? 0
         ),
         rejectReason: row?.rejectReason || row?.rejectBreakdownText || "",
+        rejectBreakdown: Array.isArray(row?.rejectBreakdown) ? row.rejectBreakdown : [],
+        lossTimeBreakdown: Array.isArray(row?.lossTimeBreakdown) ? row.lossTimeBreakdown : [],
         remarks: row?.remarks || "",
       },
     });
@@ -742,7 +747,6 @@ export default function MachineDetailsView() {
 
     try {
       setDeletingRowId(rowId);
-
       setDeletedRowIds((prev) => (prev.includes(rowId) ? prev : [...prev, rowId]));
     } catch (error) {
       console.error("Failed to delete row:", error);

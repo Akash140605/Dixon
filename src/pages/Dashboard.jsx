@@ -101,17 +101,30 @@ function MetricsHeader({
   overallAchievement,
   overallRejectRate,
   overallGoodRate,
+  onRefresh,
+  refreshing,
 }) {
   return (
     <Panel padded>
       <div className="space-y-4">
-        <div>
-          <h1 className="text-xl font-semibold tracking-tight text-slate-950 md:text-2xl">
-            Production Dashboard
-          </h1>
-          <p className="mt-1 text-sm text-slate-500">
-            Consolidated production performance, trends, diagnostics, and operational summaries.
-          </p>
+        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+          <div>
+            <h1 className="text-xl font-semibold tracking-tight text-slate-950 md:text-2xl">
+              Production Dashboard
+            </h1>
+            <p className="mt-1 text-sm text-slate-500">
+              Consolidated production performance, trends, diagnostics, and operational summaries.
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={onRefresh}
+            disabled={refreshing}
+            className="inline-flex items-center justify-center rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {refreshing ? "Refreshing..." : "Refresh Data"}
+          </button>
         </div>
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
@@ -161,12 +174,42 @@ function MetricsHeader({
   );
 }
 
+function DashboardState({ loading, error, onRetry }) {
+  if (loading) {
+    return (
+      <div className="rounded-2xl border border-slate-200 bg-white p-6 text-sm text-slate-600 shadow-sm">
+        Loading dashboard data...
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="rounded-2xl border border-rose-200 bg-rose-50 p-6 shadow-sm">
+        <p className="text-sm font-medium text-rose-700">{error}</p>
+        <button
+          type="button"
+          onClick={onRetry}
+          className="mt-4 inline-flex items-center justify-center rounded-xl bg-rose-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-rose-700"
+        >
+          Retry
+        </button>
+      </div>
+    );
+  }
+
+  return null;
+}
+
 export default function Dashboard() {
   const {
     filteredDashboardData,
     machineHourlyTrend,
     hallWiseProduction,
     operatorWiseProduction,
+    loading,
+    error,
+    refreshEntries,
   } = useProduction();
 
   const summary = filteredDashboardData?.summary || {};
@@ -180,32 +223,32 @@ export default function Dashboard() {
   const machineTrendData = safeArray(machineHourlyTrend);
 
   const totalTarget = toNumber(
-    summary.targetProduction ?? summary.totalTarget ?? summary.target,
+    summary.targetProduction ?? summary.totalTarget ?? summary.target
   );
 
   const totalActual = toNumber(
-    summary.totalProduction ?? summary.totalActual ?? summary.actual,
+    summary.totalProduction ?? summary.totalActual ?? summary.actual
   );
 
   const totalGood = toNumber(
-    summary.goodProduction ?? summary.totalGood ?? summary.good,
+    summary.goodProduction ?? summary.totalGood ?? summary.good
   );
 
   const totalReject = toNumber(
-    summary.rejection ?? summary.totalReject ?? summary.reject,
+    summary.rejection ?? summary.totalReject ?? summary.reject
   );
 
   const totalLossQty = toNumber(
     summary.lossQty ??
       summary.totalLoss ??
       summary.lossTime ??
-      summary.productionLoss,
+      summary.productionLoss
   );
 
   const totalLossMinutes = toNumber(
     summary.lossMinutes ??
       summary.totalLossMinutes ??
-      summary.lossTimeMinutes,
+      summary.lossTimeMinutes
   );
 
   const overallAchievement =
@@ -216,6 +259,14 @@ export default function Dashboard() {
 
   const overallGoodRate =
     totalActual > 0 ? (totalGood / totalActual) * 100 : 0;
+
+  const handleRefresh = async () => {
+    try {
+      await refreshEntries();
+    } catch {
+      // error already managed in context
+    }
+  };
 
   return (
     <div className="min-h-screen bg-slate-100 text-slate-900">
@@ -237,85 +288,97 @@ export default function Dashboard() {
             overallAchievement={overallAchievement}
             overallRejectRate={overallRejectRate}
             overallGoodRate={overallGoodRate}
+            onRefresh={handleRefresh}
+            refreshing={loading}
           />
 
-          <DashboardSection
-            title="Hall Navigation"
-            subtitle="Select one of the 5 halls to drill down into machine-level details."
-          >
-            <HallCardsView
-              machineHourlyTrend={machineTrendData}
-              hourlyRows={hourlyRows}
-              limit={5}
-            />
-          </DashboardSection>
+          <DashboardState
+            loading={loading && hourlyRows.length === 0}
+            error={error}
+            onRetry={handleRefresh}
+          />
 
-          <DashboardSection
-            title="Production Trend"
-            subtitle="Daily production trend for the selected period."
-          >
-            <Panel className="w-full" padded>
-              <ProductionLineChart data={dayWiseTrend} />
-            </Panel>
-          </DashboardSection>
-
-          <DashboardSection
-            title="Operational Diagnostics"
-            subtitle="Shift analysis, rejection, loss, and comparative operational insights."
-          >
-            <div className="space-y-6">
-              <Panel className="w-full" padded>
-                <ShiftBarChart data={shiftWiseData} />
-              </Panel>
-
-              <Panel className="w-full" padded>
-                <ProductionInsightsChart
-                  hourlyTable={hourlyRows}
+          {!error && (
+            <>
+              <DashboardSection
+                title="Hall Navigation"
+                subtitle="Select one of the 5 halls to drill down into machine-level details."
+              >
+                <HallCardsView
                   machineHourlyTrend={machineTrendData}
-                  shiftWiseProduction={shiftWiseData}
-                  dayWiseTrend={dayWiseTrend}
+                  hourlyRows={hourlyRows}
+                  limit={5}
                 />
-              </Panel>
-            </div>
-          </DashboardSection>
+              </DashboardSection>
 
-          <DashboardSection
-            title="Hourly Production Table"
-            subtitle="Detailed production records for the selected view."
-          >
-            <Panel className="w-full" padded>
-              <HourlyProductionTable rows={hourlyRows} />
-            </Panel>
-          </DashboardSection>
+              <DashboardSection
+                title="Production Trend"
+                subtitle="Daily production trend for the selected period."
+              >
+                <Panel className="w-full" padded>
+                  <ProductionLineChart data={dayWiseTrend} />
+                </Panel>
+              </DashboardSection>
 
-          <DashboardSection
-            title="Machine Hourly Analysis"
-            subtitle="Machine-wise hourly production trends and operational comparison."
-          >
-            <Panel className="w-full" padded>
-              <MachineHourlyChart machineHourlyTrend={machineTrendData} />
-            </Panel>
-          </DashboardSection>
+              <DashboardSection
+                title="Operational Diagnostics"
+                subtitle="Shift analysis, rejection, loss, and comparative operational insights."
+              >
+                <div className="space-y-6">
+                  <Panel className="w-full" padded>
+                    <ShiftBarChart data={shiftWiseData} />
+                  </Panel>
 
-          <DashboardSection
-            title="Performance Summary"
-            subtitle="Hall-level and operator-level performance overview."
-          >
-            <div className="space-y-6">
-              <Panel className="w-full" padded>
-                <HallPerformanceCard
-                  title="Hall Performance"
-                  subtitle="Target, actual, good output, and loss by hall."
-                  countLabel={`${hallData.length} halls`}
-                  items={hallData}
-                />
-              </Panel>
+                  <Panel className="w-full" padded>
+                    <ProductionInsightsChart
+                      hourlyTable={hourlyRows}
+                      machineHourlyTrend={machineTrendData}
+                      shiftWiseProduction={shiftWiseData}
+                      dayWiseTrend={dayWiseTrend}
+                    />
+                  </Panel>
+                </div>
+              </DashboardSection>
 
-              <Panel className="w-full" padded>
-                <OperatorPerformancePanel items={operatorData} />
-              </Panel>
-            </div>
-          </DashboardSection>
+              <DashboardSection
+                title="Hourly Production Table"
+                subtitle="Detailed production records for the selected view."
+              >
+                <Panel className="w-full" padded>
+                  <HourlyProductionTable rows={hourlyRows} />
+                </Panel>
+              </DashboardSection>
+
+              <DashboardSection
+                title="Machine Hourly Analysis"
+                subtitle="Machine-wise hourly production trends and operational comparison."
+              >
+                <Panel className="w-full" padded>
+                  <MachineHourlyChart machineHourlyTrend={machineTrendData} />
+                </Panel>
+              </DashboardSection>
+
+              <DashboardSection
+                title="Performance Summary"
+                subtitle="Hall-level and operator-level performance overview."
+              >
+                <div className="space-y-6">
+                  <Panel className="w-full" padded>
+                    <HallPerformanceCard
+                      title="Hall Performance"
+                      subtitle="Target, actual, good output, and loss by hall."
+                      countLabel={`${hallData.length} halls`}
+                      items={hallData}
+                    />
+                  </Panel>
+
+                  <Panel className="w-full" padded>
+                    <OperatorPerformancePanel items={operatorData} />
+                  </Panel>
+                </div>
+              </DashboardSection>
+            </>
+          )}
         </div>
       </main>
     </div>

@@ -207,7 +207,7 @@ function SelectField({
         <option value="all">{allLabel}</option>
         {options.map((item) => (
           <option key={item} value={item}>
-            {item}
+            {label === "Date" ? formatSafeDate(item) || item : item}
           </option>
         ))}
       </select>
@@ -269,6 +269,7 @@ function normalizeGraphRow(row = {}, block = {}) {
   return {
     id:
       row.id ||
+      row.entryId ||
       `${normalizeMachineName(row || block)}-${row.date || ""}-${row.shift || ""}-${row.hour || row.label || row.slot || ""}`,
     date: row.date || block.date || "",
     dateLabel: formatSafeDate(row.date || block.date || ""),
