@@ -1124,7 +1124,7 @@ export default function ProductionEntryForm() {
     try {
       setIsSubmitting(true);
 
-      const response = await fetch("http://kushalyouth.com/api/entries.php", {
+      const response = await fetch("https://kushalyouth.com/api/entries.php", {
         method: "POST",
         headers: {
           Accept: "application/json",
