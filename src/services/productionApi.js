@@ -1,4 +1,4 @@
-const API_BASE = "/api";
+const API_BASE = "https://kushalyouth.com/api";
 
 async function handleResponse(response) {
   console.log("[API] Response status:", response.status);
