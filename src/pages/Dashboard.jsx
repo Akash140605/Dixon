@@ -52,7 +52,7 @@ function DashboardSection({ title, subtitle, children, compact = false }) {
 function Panel({ className = "", children, padded = false }) {
   return (
     <section
-      className={`min-w-0 overflow-hidden rounded-none border border-slate-300 bg-white shadow-none ${
+      className={`min-w-0 overflow-hidden rounded-md border border-slate-300 bg-white shadow-sm ${
         padded ? "p-2 sm:p-3 md:p-4" : ""
       } ${className}`}
     >
@@ -72,7 +72,7 @@ function KpiCard({ label, value, tone = "default", helper }) {
   };
 
   return (
-    <div className="min-w-0 rounded-none border border-slate-300 bg-white p-2.5 sm:p-3 shadow-none">
+    <div className="min-w-0 rounded-md border border-slate-300 bg-white p-2.5 sm:p-3 shadow-sm">
       <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">
         {label}
       </p>
@@ -122,7 +122,7 @@ function MetricsHeader({
             type="button"
             onClick={onRefresh}
             disabled={refreshing}
-            className="inline-flex h-9 w-full items-center justify-center rounded-none border border-slate-300 bg-white px-3 text-sm font-medium text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
+            className="inline-flex h-9 w-full items-center justify-center rounded-md border border-slate-300 bg-white px-3 text-sm font-medium text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
           >
             {refreshing ? "Refreshing..." : "Refresh Data"}
           </button>
@@ -178,7 +178,7 @@ function MetricsHeader({
 function DashboardState({ loading, error, onRetry }) {
   if (loading) {
     return (
-      <div className="rounded-none border border-slate-300 bg-white p-4 text-sm text-slate-600">
+      <div className="rounded-md border border-slate-300 bg-white p-4 text-sm text-slate-600">
         Loading dashboard data...
       </div>
     );
@@ -186,12 +186,12 @@ function DashboardState({ loading, error, onRetry }) {
 
   if (error) {
     return (
-      <div className="rounded-none border border-rose-300 bg-rose-50 p-4">
+      <div className="rounded-md border border-rose-300 bg-rose-50 p-4">
         <p className="text-sm font-medium text-rose-700">{error}</p>
         <button
           type="button"
           onClick={onRetry}
-          className="mt-3 inline-flex h-9 items-center justify-center rounded-none border border-rose-700 bg-rose-600 px-3 text-sm font-medium text-white transition hover:bg-rose-700"
+          className="mt-3 inline-flex h-9 items-center justify-center rounded-md border border-rose-700 bg-rose-600 px-3 text-sm font-medium text-white transition hover:bg-rose-700"
         >
           Retry
         </button>
@@ -214,7 +214,7 @@ export default function Dashboard() {
   } = useProduction();
 
   const filterBarRef = useRef(null);
-  const [topOffset, setTopOffset] = useState(72);
+  const [topOffset, setTopOffset] = useState(96);
 
   useEffect(() => {
     const el = filterBarRef.current;
@@ -222,12 +222,15 @@ export default function Dashboard() {
 
     const updateHeight = () => {
       const nextHeight = el.getBoundingClientRect().height;
-      setTopOffset(nextHeight || 72);
+      setTopOffset(nextHeight || 96);
     };
 
     updateHeight();
 
-    const observer = new ResizeObserver(updateHeight);
+    const observer = new ResizeObserver(() => {
+      updateHeight();
+    });
+
     observer.observe(el);
     window.addEventListener("resize", updateHeight);
 
@@ -236,6 +239,16 @@ export default function Dashboard() {
       window.removeEventListener("resize", updateHeight);
     };
   }, []);
+
+  useEffect(() => {
+    const intervalId = setInterval(async () => {
+      try {
+        await refreshEntries();
+      } catch {}
+    }, 30000);
+
+    return () => clearInterval(intervalId);
+  }, [refreshEntries]);
 
   const summary = filteredDashboardData?.summary || {};
 
@@ -288,14 +301,15 @@ export default function Dashboard() {
   const handleRefresh = async () => {
     try {
       await refreshEntries();
-    } catch {
-      // context already handles this
-    }
+    } catch {}
   };
 
   return (
     <div className="min-h-screen bg-slate-100 text-slate-900">
-      <div ref={filterBarRef} className="fixed inset-x-0 top-0 z-50">
+      <div
+        ref={filterBarRef}
+        className="fixed inset-x-0 top-0 z-50 bg-white"
+      >
         <FilterBar />
       </div>
 
