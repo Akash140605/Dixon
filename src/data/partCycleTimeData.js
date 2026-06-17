@@ -1,4 +1,5 @@
 export const partCycleTimeData = [
+    { partName: "Other", cycleTime: 0 },
   { partName: "ADJUSTOR T2", cycleTime: 36 },
   { partName: "AIR DRY RING DECO T7 (SMALL)", cycleTime: 36 },
   { partName: "AIR DRY RING T7 BIG", cycleTime: 45 },

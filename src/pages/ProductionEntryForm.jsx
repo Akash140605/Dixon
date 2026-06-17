@@ -247,6 +247,7 @@ function getInitialFormState() {
     duration: "",
     shift: "",
     part: "",
+    partMode: "select",
     cycleTime: "",
     operatorId: "",
     operator: "",
@@ -263,7 +264,6 @@ function getInitialFormState() {
     rejectBreakdown: createRejectBreakdown(),
   };
 }
-
 function getStoredJson(key, fallbackValue) {
   try {
     const value = localStorage.getItem(key);
@@ -338,12 +338,20 @@ function mergeDraftWithDefaults(draft, options = {}) {
       typeof draft?.machineDisplayName === "string"
         ? draft.machineDisplayName
         : "",
+    part: typeof draft?.part === "string" ? draft.part : "",
+    partMode:
+      draft?.partMode === "manual" || draft?.partMode === "select"
+        ? draft.partMode
+        : "select",
+    cycleTime:
+      typeof draft?.cycleTime === "string" || typeof draft?.cycleTime === "number"
+        ? String(draft.cycleTime)
+        : "",
     isEditMode: Boolean(draft?.isEditMode),
     rejectBreakdown: normalizeRejectBreakdown(draft?.rejectBreakdown),
     lossTimeBreakdown: normalizeLossBreakdown(draft?.lossTimeBreakdown),
   };
 }
-
 function getFormValidationErrors(form) {
   const errors = {};
   const actual = Number(form.actual || 0);
@@ -875,99 +883,63 @@ const lossTimeMinutes = calculateLossTimeMinutes(
   const clearRouteState = () => {
     navigate(location.pathname, { replace: true, state: null });
   };
+const handlePartChange = (e) => {
+  const value = e.target.value;
 
-  const handleChange = (e) => {
-    const { name, value } = e.target;
+  if (value === "Other") {
+    setForm((prev) => ({
+      ...prev,
+      part: "",
+      cycleTime: "",
+      partMode: "manual",
+    }));
+    return;
+  }
+
+  const matchedPart = partCycleTimeData.find(
+    (item) => item.partName === value
+  );
+
+  setForm((prev) => ({
+    ...prev,
+    part: value,
+    cycleTime: matchedPart ? String(matchedPart.cycleTime ?? "") : "",
+    partMode: "select",
+  }));
+};
+const handleChange = (e) => {
+  const { name, value } = e.target;
+
+  setForm((prev) => {
+    const updated = {
+      ...prev,
+      [name]: value,
+    };
+
+    if (name === "duration") {
+      updated.shift = getShiftByDuration(value);
+    }
 
     if (name === "hall") {
-      setForm((prev) =>
-        syncDerivedValues({
-          ...prev,
-          date: prev.isEditMode ? prev.date : getTodayDate(),
-          hall: value,
-          machine: "",
-          machineCode: "",
-          machineName: "",
-          machineDisplayName: "",
-        }),
-      );
-      return;
+      updated.machine = "";
+      updated.machineCode = "";
+      updated.machineName = "";
+      updated.machineDisplayName = "";
     }
 
     if (name === "machine") {
-      const selectedMachine =
-        machineOptions.find((item) => item.code === value) || null;
+      const hallMachines = value && prev.hall ? machineMap[prev.hall] || [] : [];
+      const matchedMachine = hallMachines.find((item) => item.code === value);
 
-      setForm((prev) =>
-        syncDerivedValues({
-          ...prev,
-          date: prev.isEditMode ? prev.date : getTodayDate(),
-          machine: selectedMachine?.code || "",
-          machineCode: selectedMachine?.code || "",
-          machineName: selectedMachine?.name || "",
-          machineDisplayName: selectedMachine?.displayName || "",
-        }),
-      );
-      return;
+      updated.machine = value;
+      updated.machineCode = matchedMachine?.code || "";
+      updated.machineName = matchedMachine?.name || "";
+      updated.machineDisplayName = matchedMachine?.displayName || "";
     }
 
-    if (name === "duration") {
-      setForm((prev) =>
-        syncDerivedValues({
-          ...prev,
-          date: prev.isEditMode ? prev.date : getTodayDate(),
-          duration: value,
-          shift: getShiftByDuration(value),
-        }),
-      );
-      return;
-    }
-
-    if (name === "part") {
-      setForm((prev) =>
-        syncDerivedValues({
-          ...prev,
-          date: prev.isEditMode ? prev.date : getTodayDate(),
-          part: value,
-        }),
-      );
-      return;
-    }
-
-    if (name === "operatorId") {
-      const cleanValue = value.toUpperCase();
-      const matchedOperator = operatorMaster.find(
-        (item) => String(item.id || "").toUpperCase() === cleanValue,
-      );
-
-      setForm((prev) => ({
-        ...prev,
-        date: prev.isEditMode ? prev.date : getTodayDate(),
-        operatorId: cleanValue,
-        operator: matchedOperator ? matchedOperator.name : prev.operator,
-        isNewOperator: cleanValue ? !matchedOperator : false,
-      }));
-      return;
-    }
-
-    if (name === "actual") {
-      setForm((prev) =>
-        syncDerivedValues({
-          ...prev,
-          date: prev.isEditMode ? prev.date : getTodayDate(),
-          actual: value,
-        }),
-      );
-      return;
-    }
-
-    setForm((prev) => ({
-      ...prev,
-      date: prev.isEditMode ? prev.date : getTodayDate(),
-      [name]: value,
-    }));
-  };
-
+    return updated;
+  });
+};
   const handleRejectRowChange = (rowId, value) => {
     setForm((prev) =>
       syncDerivedValues({
@@ -1356,34 +1328,62 @@ setForm((prev) =>
                   readOnly
                 />
               </Field>
-
-              <Field label="Part Name">
-                <select
-                  name="part"
-                  value={form.part}
-                  onChange={handleChange}
-                  className="field"
-                  required
-                >
-                  <option value="">Select Part</option>
-                  {partCycleTimeData.map((item) => (
-                    <option key={item.partName} value={item.partName}>
-                      {item.partName}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-
-              <Field label="Cycle Time (sec)">
-                <input
-                  type="number"
-                  name="cycleTime"
-                  value={form.cycleTime}
-                  className={getFieldClassName(false, true)}
-                  inputMode="numeric"
-                  readOnly
-                />
-              </Field>
+<Field label="Part Name">
+  {form.partMode === "manual" ? (
+    <>
+      <input
+        type="text"
+        name="part"
+        value={form.part}
+        onChange={handleChange}
+        className="field"
+        placeholder="Enter part name"
+        required
+      />
+      <button
+        type="button"
+        className="outline-btn"
+        onClick={() =>
+          setForm((prev) => ({
+            ...prev,
+            part: "",
+            cycleTime: "",
+            partMode: "select",
+          }))
+        }
+      >
+        Back to Parts
+      </button>
+    </>
+  ) : (
+    <select
+      name="part"
+      value={form.part}
+      onChange={handlePartChange}
+      className="field"
+      required
+    >
+      <option value="">Select Part</option>
+      {partCycleTimeData.map((item) => (
+        <option key={item.partName} value={item.partName}>
+          {item.partName}
+        </option>
+      ))}
+      <option value="__manual__">Other</option>
+    </select>
+  )}
+</Field>
+<Field label="Cycle Time (sec)">
+  <input
+    type="number"
+    name="cycleTime"
+    value={form.cycleTime}
+    onChange={handleChange}
+    className={getFieldClassName(false, form.partMode !== "manual")}
+    inputMode="numeric"
+    readOnly={form.partMode !== "manual"}
+  />
+</Field>
             </div>
           </section>
 

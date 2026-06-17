@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
+import React, { createContext, useContext, useEffect, useMemo, useState, useCallback } from "react";
 import { initialDashboardData } from "../data/initialData";
 import {
   fetchEntriesApi,
@@ -33,18 +33,9 @@ function normalizeShiftCode(shiftValue = "") {
   const value = String(shiftValue || "").trim().toUpperCase();
 
   if (!value) return "";
-
-  if (value === "A" || value === "SHIFT A" || value === "SHIFT 1" || value === "1") {
-    return "A";
-  }
-
-  if (value === "B" || value === "SHIFT B" || value === "SHIFT 2" || value === "2") {
-    return "B";
-  }
-
-  if (value === "C" || value === "SHIFT C" || value === "SHIFT 3" || value === "3") {
-    return "C";
-  }
+  if (value === "A" || value === "SHIFT A" || value === "SHIFT 1" || value === "1") return "A";
+  if (value === "B" || value === "SHIFT B" || value === "SHIFT 2" || value === "2") return "B";
+  if (value === "C" || value === "SHIFT C" || value === "SHIFT 3" || value === "3") return "C";
 
   return value.replace(/^SHIFT\s+/i, "").trim();
 }
@@ -81,7 +72,10 @@ function parseHourLabel(hourLabel = "") {
 function formatDisplayDate(dateString) {
   if (!dateString) return "";
   const date = new Date(dateString);
-  if (Number.isNaN(date.getTime())) return "";
+  if (Number.isNaN(date.getTime())) {
+    const raw = String(dateString).trim();
+    return raw.length >= 10 ? raw.slice(0, 10) : raw;
+  }
   return date.toISOString().slice(0, 10);
 }
 
@@ -99,7 +93,7 @@ function normalizeRejectBreakdown(breakdown = []) {
   return breakdown
     .map((item) => ({
       id: item?.id || createEntryId(),
-      reason: item?.reason || "",
+      reason: String(item?.reason || "").trim(),
       qty: Number(item?.qty || 0),
     }))
     .filter((item) => item.reason && item.qty > 0);
@@ -140,8 +134,8 @@ function normalizeResponsibilities(responsibilities = [], lossTimeBreakdown = []
   if (Array.isArray(responsibilities) && responsibilities.length > 0) {
     return responsibilities
       .map((item) => ({
-        person: item?.person || item?.name || "",
-        department: item?.department || "",
+        person: String(item?.person || item?.name || "").trim(),
+        department: String(item?.department || "").trim(),
       }))
       .filter((item) => item.person);
   }
@@ -149,8 +143,8 @@ function normalizeResponsibilities(responsibilities = [], lossTimeBreakdown = []
   if (Array.isArray(lossTimeBreakdown) && lossTimeBreakdown.length > 0) {
     return lossTimeBreakdown
       .map((item) => ({
-        person: item?.person || "",
-        department: item?.department || "",
+        person: String(item?.person || "").trim(),
+        department: String(item?.department || "").trim(),
       }))
       .filter((item) => item.person);
   }
@@ -200,6 +194,10 @@ function getMachineDisplay(row = {}) {
   return "";
 }
 
+function resolveStableEntryId(row = {}) {
+  return String(row.entryId || row.id || row._id || createEntryId());
+}
+
 function normalizeHourlyRow(row = {}) {
   const normalizedBreakdown = normalizeRejectBreakdown(row.rejectBreakdown);
   const normalizedLossTimeBreakdown = normalizeLossTimeBreakdown(
@@ -224,12 +222,12 @@ function normalizeHourlyRow(row = {}) {
   );
 
   const shiftCode = normalizeShiftCode(row.shift || row.shiftLabel);
-  const generatedId = row.id || row.entryId || createEntryId();
+  const stableId = resolveStableEntryId(row);
 
   return {
     ...row,
-    id: row.id ?? generatedId,
-    entryId: row.entryId || String(row.id ?? generatedId),
+    id: stableId,
+    entryId: stableId,
     operatorId: row.operatorId || "",
     operator: row.operator || "",
     isNewOperator: Boolean(row.isNewOperator),
@@ -257,7 +255,7 @@ function normalizeHourlyRow(row = {}) {
     machineCode: row.machineCode || row.machine?.code || "",
     machineName: row.machineName || row.machine?.name || "",
     part: row.part || "",
-    date: row.date || "",
+    date: formatDisplayDate(row.date || ""),
     createdAt: row.created_at || row.createdAt || "",
     updatedAt: row.updated_at || row.updatedAt || "",
   };
@@ -281,7 +279,7 @@ function updateSummary(hourlyTable) {
     lossQty: lossTime,
     lossMinutes: lossTimeMinutes,
     rejectionPercent:
-      totalProduction > 0 ? ((rejection / totalProduction) * 100).toFixed(2) + "%" : "0.00%",
+      totalProduction > 0 ? `${((rejection / totalProduction) * 100).toFixed(2)}%` : "0.00%",
   };
 }
 
@@ -319,7 +317,7 @@ function buildDayWiseTrend(hourlyTable) {
     current.lossMinutes += Number(row.lossTimeMinutes || 0);
   });
 
-  return Array.from(dayWiseMap.values());
+  return Array.from(dayWiseMap.values()).sort((a, b) => String(a.date).localeCompare(String(b.date)));
 }
 
 function buildShiftWiseProduction(hourlyTable) {
@@ -354,7 +352,7 @@ function buildShiftWiseProduction(hourlyTable) {
     current.lossMinutes += Number(row.lossTimeMinutes || 0);
   });
 
-  return Array.from(shiftMap.values());
+  return Array.from(shiftMap.values()).sort((a, b) => String(a.shift).localeCompare(String(b.shift)));
 }
 
 function buildRejectionBreakdown(hourlyTable) {
@@ -374,10 +372,7 @@ function buildRejectionBreakdown(hourlyTable) {
   });
 
   return Array.from(rejectionMap.entries())
-    .map(([reason, value]) => ({
-      reason,
-      value,
-    }))
+    .map(([reason, value]) => ({ reason, value }))
     .filter((item) => item.reason && item.value > 0)
     .sort((a, b) => b.value - a.value);
 }
@@ -518,7 +513,7 @@ function buildHallWiseProduction(hourlyTable) {
     current.lossMinutes += Number(row.lossTimeMinutes || 0);
   });
 
-  return Array.from(hallMap.values());
+  return Array.from(hallMap.values()).sort((a, b) => String(a.hall).localeCompare(String(b.hall)));
 }
 
 function buildOperatorWiseProduction(hourlyTable) {
@@ -621,13 +616,13 @@ function createNormalizedEntryPayload(entry) {
     normalizedLossTimeBreakdown
   );
 
-  const generatedId = entry.id || entry.entryId || createEntryId();
+  const stableId = String(entry.id || entry.entryId || createEntryId());
   const machineDisplayName = entry.machineDisplayName || entry.machine || "";
   const nowIso = new Date().toISOString();
 
   return normalizeHourlyRow({
-    id: entry.id || generatedId,
-    entryId: entry.entryId || generatedId,
+    id: stableId,
+    entryId: stableId,
     date: entry.date,
     hall: entry.hall,
     machine: machineDisplayName,
@@ -665,7 +660,7 @@ export function ProductionProvider({ children }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const replaceHourlyTable = (updater) => {
+  const replaceHourlyTable = useCallback((updater) => {
     setDashboardData((prev) => {
       const nextHourlyTable =
         typeof updater === "function" ? updater(prev.hourlyTable) : updater;
@@ -680,9 +675,9 @@ export function ProductionProvider({ children }) {
         ...buildDerivedDashboardData(normalizedHourlyTable),
       };
     });
-  };
+  }, []);
 
-  const refreshEntries = async (signal) => {
+  const refreshEntries = useCallback(async (signal) => {
     setLoading(true);
     setError("");
 
@@ -699,75 +694,97 @@ export function ProductionProvider({ children }) {
 
       return normalizedRows;
     } catch (err) {
-      if (err.message !== "Request cancelled") {
-        setError(err.message || "Failed to refresh production data");
+      if (err?.name === "AbortError" || err?.message === "Request cancelled") {
+        return [];
       }
+
+      setError(err.message || "Failed to refresh production data");
       throw err;
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     const controller = new AbortController();
-
     refreshEntries(controller.signal).catch(() => {});
-
     return () => controller.abort();
+  }, [refreshEntries]);
+
+  const findSavedEntry = useCallback((rows = [], seed = {}) => {
+    const incomingId = String(seed?.id || seed?.entryId || "");
+    if (incomingId) {
+      const byId = rows.find(
+        (row) => String(row.id) === incomingId || String(row.entryId) === incomingId
+      );
+      if (byId) return byId;
+    }
+
+    return rows.find((row) => {
+      const sameDate = String(row.date || "") === String(formatDisplayDate(seed.date || ""));
+      const sameHall = String(row.hall || "") === String(seed.hall || "");
+      const sameMachine = String(row.machineCode || row.machine || "") === String(seed.machineCode || seed.machine || "");
+      const sameShift =
+        String(normalizeShiftCode(row.shift || row.shiftLabel)) ===
+        String(normalizeShiftCode(seed.shift || seed.shiftLabel));
+      const sameHour = String(row.duration || row.hour || "") === String(seed.duration || seed.hour || "");
+      const sameOperator = String(row.operatorId || row.operator || "") === String(seed.operatorId || seed.operator || "");
+      return sameDate && sameHall && sameMachine && sameShift && sameHour && sameOperator;
+    }) || null;
   }, []);
 
-  const addProductionEntry = async (entry) => {
+  const addProductionEntry = useCallback(async (entry) => {
     const payload = createNormalizedEntryPayload(entry);
-    const response = await createEntryApi(payload);
-    await refreshEntries();
-    return response?.data || payload;
-  };
+    await createEntryApi(payload);
+    const rows = await refreshEntries();
+    return findSavedEntry(rows, payload) || payload;
+  }, [refreshEntries, findSavedEntry]);
 
-  const upsertProductionEntry = async (entry) => {
+  const upsertProductionEntry = useCallback(async (entry) => {
     const payload = createNormalizedEntryPayload(entry);
 
-    if (entry?.id) {
-      await updateEntryApi({ ...payload, id: entry.id });
+    if (entry?.id || entry?.entryId) {
+      const stableId = String(entry.id || entry.entryId);
+      await updateEntryApi({ ...payload, id: stableId, entryId: stableId });
     } else {
       await createEntryApi(payload);
     }
 
-    await refreshEntries();
-    return payload;
-  };
+    const rows = await refreshEntries();
+    return findSavedEntry(rows, payload) || payload;
+  }, [refreshEntries, findSavedEntry]);
 
-  const deleteProductionEntry = async (entryId) => {
+  const deleteProductionEntry = useCallback(async (entryId) => {
     if (!entryId) return false;
-
     await deleteEntryApi(entryId);
     await refreshEntries();
     return true;
-  };
+  }, [refreshEntries]);
 
   const entryMap = useMemo(() => {
     const map = new Map();
 
     dashboardData.hourlyTable.forEach((item) => {
-      if (item?.entryId) map.set(item.entryId, item);
-      if (item?.id) map.set(item.id, item);
+      if (item?.entryId) map.set(String(item.entryId), item);
+      if (item?.id) map.set(String(item.id), item);
     });
 
     return map;
   }, [dashboardData.hourlyTable]);
 
-  const getProductionEntryById = (entryId) => {
+  const getProductionEntryById = useCallback((entryId) => {
     if (!entryId) return null;
-    return entryMap.get(entryId) || null;
-  };
+    return entryMap.get(String(entryId)) || null;
+  }, [entryMap]);
 
-  const resetFilters = () => {
+  const resetFilters = useCallback(() => {
     setFilters(initialFilters);
-  };
+  }, []);
 
-  const resetDashboardData = async () => {
+  const resetDashboardData = useCallback(async () => {
     setFilters(initialFilters);
     await refreshEntries();
-  };
+  }, [refreshEntries]);
 
   const filteredDashboardData = useMemo(() => {
     const filteredHourlyTable = dashboardData.hourlyTable.filter((row) => {
@@ -813,14 +830,14 @@ export function ProductionProvider({ children }) {
 
   const currentShiftCode = useMemo(() => getCurrentShiftCode(), []);
 
-  const setCurrentShiftFilter = () => {
+  const setCurrentShiftFilter = useCallback(() => {
     const today = new Date().toISOString().slice(0, 10);
     setFilters((prev) => ({
       ...prev,
       date: today,
       shift: getCurrentShiftCode(),
     }));
-  };
+  }, []);
 
   const value = useMemo(
     () => ({
@@ -850,7 +867,23 @@ export function ProductionProvider({ children }) {
       loading,
       error,
     }),
-    [dashboardData, filteredDashboardData, currentShiftCode, loading, error]
+    [
+      dashboardData,
+      addProductionEntry,
+      upsertProductionEntry,
+      deleteProductionEntry,
+      getProductionEntryById,
+      replaceHourlyTable,
+      refreshEntries,
+      filters,
+      filteredDashboardData,
+      currentShiftCode,
+      setCurrentShiftFilter,
+      loading,
+      error,
+      resetFilters,
+      resetDashboardData,
+    ]
   );
 
   return (
