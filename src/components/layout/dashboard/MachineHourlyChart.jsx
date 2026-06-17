@@ -7,6 +7,7 @@ import {
   Area,
   XAxis,
   YAxis,
+  LabelList,
   CartesianGrid,
   Tooltip,
   Cell,
@@ -60,7 +61,8 @@ function getThemeTokens(theme = "light") {
       lossMinutes: "#f97316",
       badge: "bg-slate-900 text-slate-200 border-slate-700",
       chip: "bg-slate-900 text-slate-300 border-slate-700",
-      input: "bg-slate-950 border-slate-700 text-slate-100 placeholder:text-slate-500",
+      input:
+        "bg-slate-950 border-slate-700 text-slate-100 placeholder:text-slate-500",
       scrollbarThumb: "rgba(148,163,184,0.35)",
       scrollbarTrack: "rgba(255,255,255,0.04)",
     };
@@ -87,7 +89,8 @@ function getThemeTokens(theme = "light") {
     lossMinutes: "#ea580c",
     badge: "bg-slate-100 text-slate-700 border-slate-300",
     chip: "bg-slate-50 text-slate-700 border-slate-300",
-    input: "bg-white border-slate-300 text-slate-800 placeholder:text-slate-400",
+    input:
+      "bg-white border-slate-300 text-slate-800 placeholder:text-slate-400",
     scrollbarThumb: "rgba(100,116,139,0.45)",
     scrollbarTrack: "rgba(148,163,184,0.10)",
   };
@@ -156,7 +159,7 @@ function isRowInDateRange(row, fromDate, toDate) {
   const rowDateOnly = new Date(
     parsed.getFullYear(),
     parsed.getMonth(),
-    parsed.getDate()
+    parsed.getDate(),
   );
 
   if (fromDate) {
@@ -172,11 +175,17 @@ function isRowInDateRange(row, fromDate, toDate) {
   return true;
 }
 
-function buildRejectBreakdownText(rejectBreakdown = [], rejectReason, reject = 0) {
+function buildRejectBreakdownText(
+  rejectBreakdown = [],
+  rejectReason,
+  reject = 0,
+) {
   if (Array.isArray(rejectBreakdown) && rejectBreakdown.length) {
     return rejectBreakdown
       .filter((item) => item?.reason || toNumber(item?.qty) > 0)
-      .map((item) => `${item?.reason || "Other"} ${formatNumber(item?.qty || 0)}`)
+      .map(
+        (item) => `${item?.reason || "Other"} ${formatNumber(item?.qty || 0)}`,
+      )
       .join(", ");
   }
 
@@ -188,10 +197,14 @@ function buildRejectBreakdownText(rejectBreakdown = [], rejectReason, reject = 0
 }
 
 function buildLossBreakdownText(lossTimeBreakdown = []) {
-  if (!Array.isArray(lossTimeBreakdown) || !lossTimeBreakdown.length) return "-";
+  if (!Array.isArray(lossTimeBreakdown) || !lossTimeBreakdown.length)
+    return "-";
 
   return lossTimeBreakdown
-    .filter((item) => item?.reason || toNumber(item?.qty) > 0 || toNumber(item?.minutes) > 0)
+    .filter(
+      (item) =>
+        item?.reason || toNumber(item?.qty) > 0 || toNumber(item?.minutes) > 0,
+    )
     .map((item) => {
       const reason = item?.reason || "Other";
       const qty = formatNumber(item?.qty || 0);
@@ -212,12 +225,22 @@ function normalizeRow(row = {}, machine = {}) {
       ? toNumber(row.lossMinutes)
       : toNumber(row.lossTimeMinutes);
 
-  const rejectBreakdown = Array.isArray(row.rejectBreakdown) ? row.rejectBreakdown : [];
-  const lossTimeBreakdown = Array.isArray(row.lossTimeBreakdown) ? row.lossTimeBreakdown : [];
+  const rejectBreakdown = Array.isArray(row.rejectBreakdown)
+    ? row.rejectBreakdown
+    : [];
+  const lossTimeBreakdown = Array.isArray(row.lossTimeBreakdown)
+    ? row.lossTimeBreakdown
+    : [];
 
   return {
     ...row,
-    hour: row.hour || row.label || row.slot || row.duration || row.time || "Unknown",
+    hour:
+      row.hour ||
+      row.label ||
+      row.slot ||
+      row.duration ||
+      row.time ||
+      "Unknown",
     actual,
     good: toNumber(row.good ?? actual - reject),
     reject,
@@ -236,7 +259,8 @@ function normalizeRow(row = {}, machine = {}) {
     rejectBreakdown,
     lossTimeBreakdown,
     rejectBreakdownText:
-      row.rejectBreakdownText || buildRejectBreakdownText(rejectBreakdown, row.rejectReason, reject),
+      row.rejectBreakdownText ||
+      buildRejectBreakdownText(rejectBreakdown, row.rejectReason, reject),
     lossTimeBreakdownText:
       row.lossTimeBreakdownText || buildLossBreakdownText(lossTimeBreakdown),
     createdAt: row.createdAt || row.updatedAt || row.date || "",
@@ -248,12 +272,15 @@ function normalizeMachineItem(machine = {}) {
   const rawRows = Array.isArray(machine.data)
     ? machine.data
     : Array.isArray(machine.rows)
-    ? machine.rows
-    : [];
+      ? machine.rows
+      : [];
 
   const normalizedData = rawRows
     .map((row) => normalizeRow(row, machine))
-    .sort((a, b) => parseHourLabelToMinutes(a.hour) - parseHourLabelToMinutes(b.hour));
+    .sort(
+      (a, b) =>
+        parseHourLabelToMinutes(a.hour) - parseHourLabelToMinutes(b.hour),
+    );
 
   const firstRow = normalizedData[0] || {};
 
@@ -307,7 +334,8 @@ function convertFlatRowsToMachineGroups(rows = []) {
 }
 
 function normalizeMachineHourlyTrendShape(machineHourlyTrend = []) {
-  if (!Array.isArray(machineHourlyTrend) || !machineHourlyTrend.length) return [];
+  if (!Array.isArray(machineHourlyTrend) || !machineHourlyTrend.length)
+    return [];
 
   const first = machineHourlyTrend[0];
   if (Array.isArray(first?.data) || Array.isArray(first?.rows)) {
@@ -359,12 +387,42 @@ function CustomTooltip({ active, payload, label, theme = "light" }) {
       <p className={`text-sm font-bold ${t.title}`}>{label}</p>
 
       <div className="mt-3 space-y-2 text-sm">
-        <TooltipRow label="Actual" value={row.actual} color={t.actual} muted={t.muted} />
-        <TooltipRow label="Good" value={row.good} color={t.good} muted={t.muted} />
-        <TooltipRow label="Reject" value={row.reject} color={t.reject} muted={t.muted} />
-        <TooltipRow label="Target" value={row.target} color={t.target} muted={t.muted} />
-        <TooltipRow label="Loss Qty" value={row.lossTime} color={t.lossQty} muted={t.muted} />
-        <TooltipRow label="Loss Min" value={row.lossMinutes || 0} color={t.lossMinutes} muted={t.muted} />
+        <TooltipRow
+          label="Actual"
+          value={row.actual}
+          color={t.actual}
+          muted={t.muted}
+        />
+        <TooltipRow
+          label="Good"
+          value={row.good}
+          color={t.good}
+          muted={t.muted}
+        />
+        <TooltipRow
+          label="Reject"
+          value={row.reject}
+          color={t.reject}
+          muted={t.muted}
+        />
+        <TooltipRow
+          label="Target"
+          value={row.target}
+          color={t.target}
+          muted={t.muted}
+        />
+        <TooltipRow
+          label="Loss Qty"
+          value={row.lossTime}
+          color={t.lossQty}
+          muted={t.muted}
+        />
+        <TooltipRow
+          label="Loss Min"
+          value={row.lossMinutes || 0}
+          color={t.lossMinutes}
+          muted={t.muted}
+        />
         <TooltipRow
           label="Variance"
           value={variance}
@@ -377,11 +435,25 @@ function CustomTooltip({ active, payload, label, theme = "light" }) {
           color={variance >= 0 ? t.good : t.target}
           muted={t.muted}
         />
-        <TooltipText label="Shift" value={row.shift || "-"} text={t.text} muted={t.muted} />
-        <TooltipText label="Part" value={row.part || "-"} text={t.text} muted={t.muted} />
+        <TooltipText
+          label="Shift"
+          value={row.shift || "-"}
+          text={t.text}
+          muted={t.muted}
+        />
+        <TooltipText
+          label="Part"
+          value={row.part || "-"}
+          text={t.text}
+          muted={t.muted}
+        />
         <TooltipText
           label="Operator"
-          value={row.operatorId ? `${row.operator} - ${row.operatorId}` : row.operator || "-"}
+          value={
+            row.operatorId
+              ? `${row.operator} - ${row.operatorId}`
+              : row.operator || "-"
+          }
           text={t.text}
           muted={t.muted}
         />
@@ -407,8 +479,15 @@ function MiniStat({ label, value, valueColor, theme = "light", helper }) {
 
   return (
     <div className={`border px-3 py-3 ${t.softBg} ${t.border}`}>
-      <p className={`text-[10px] uppercase tracking-[0.16em] font-bold ${t.muted}`}>{label}</p>
-      <p className="mt-1 text-base font-bold tabular-nums" style={{ color: valueColor }}>
+      <p
+        className={`text-[10px] uppercase tracking-[0.16em] font-bold ${t.muted}`}
+      >
+        {label}
+      </p>
+      <p
+        className="mt-1 text-base font-bold tabular-nums"
+        style={{ color: valueColor }}
+      >
         {typeof value === "number" ? formatNumber(value) : value}
       </p>
       {helper ? <p className={`mt-1 text-xs ${t.muted}`}>{helper}</p> : null}
@@ -427,30 +506,69 @@ function MachineSummary({ machine, theme = "light" }) {
       acc.lossMinutes += toNumber(row.lossMinutes);
       return acc;
     },
-    { actual: 0, good: 0, reject: 0, target: 0, lossTime: 0, lossMinutes: 0 }
+    { actual: 0, good: 0, reject: 0, target: 0, lossTime: 0, lossMinutes: 0 },
   );
 
   const t = getThemeTokens(theme);
   const rejectPercent =
-    totals.actual > 0 ? `${((totals.reject / totals.actual) * 100).toFixed(2)}%` : "0.00%";
+    totals.actual > 0
+      ? `${((totals.reject / totals.actual) * 100).toFixed(2)}%`
+      : "0.00%";
   const achievement =
-    totals.target > 0 ? `${((totals.actual / totals.target) * 100).toFixed(1)}%` : "0.0%";
+    totals.target > 0
+      ? `${((totals.actual / totals.target) * 100).toFixed(1)}%`
+      : "0.0%";
 
   return (
     <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4 2xl:grid-cols-8">
-      <MiniStat label="Actual" value={totals.actual} valueColor={t.actual} theme={theme} />
-      <MiniStat label="Good" value={totals.good} valueColor={t.good} theme={theme} />
-      <MiniStat label="Reject" value={totals.reject} valueColor={t.reject} theme={theme} />
-      <MiniStat label="Target" value={totals.target} valueColor={t.target} theme={theme} />
-      <MiniStat label="Loss Qty" value={totals.lossTime} valueColor={t.lossQty} theme={theme} />
+      <MiniStat
+        label="Actual"
+        value={totals.actual}
+        valueColor={t.actual}
+        theme={theme}
+      />
+      <MiniStat
+        label="Good"
+        value={totals.good}
+        valueColor={t.good}
+        theme={theme}
+      />
+      <MiniStat
+        label="Reject"
+        value={totals.reject}
+        valueColor={t.reject}
+        theme={theme}
+      />
+      <MiniStat
+        label="Target"
+        value={totals.target}
+        valueColor={t.target}
+        theme={theme}
+      />
+      <MiniStat
+        label="Loss Qty"
+        value={totals.lossTime}
+        valueColor={t.lossQty}
+        theme={theme}
+      />
       <MiniStat
         label="Loss Min"
         value={totals.lossMinutes}
         valueColor={t.lossMinutes}
         theme={theme}
       />
-      <MiniStat label="Reject %" value={rejectPercent} valueColor={t.reject} theme={theme} />
-      <MiniStat label="Achieve" value={achievement} valueColor={t.good} theme={theme} />
+      <MiniStat
+        label="Reject %"
+        value={rejectPercent}
+        valueColor={t.reject}
+        theme={theme}
+      />
+      <MiniStat
+        label="Achieve"
+        value={achievement}
+        valueColor={t.good}
+        theme={theme}
+      />
     </div>
   );
 }
@@ -467,17 +585,26 @@ function FilterBar({
   const t = getThemeTokens(theme);
 
   return (
-    <div className={`sticky top-0 z-10 border p-4 mb-4 ${t.softBgStrong} ${t.border}`}>
+    <div
+      className={`sticky top-0 z-10 border p-4 mb-4 ${t.softBgStrong} ${t.border}`}
+    >
       <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
         <div>
-          <p className="text-xs uppercase tracking-[0.2em] font-bold" style={{ color: t.actual }}>
+          <p
+            className="text-xs uppercase tracking-[0.2em] font-bold"
+            style={{ color: t.actual }}
+          >
             Filters
           </p>
-          <h4 className={`mt-2 text-base font-bold ${t.title}`}>Machine hourly records</h4>
+          <h4 className={`mt-2 text-base font-bold ${t.title}`}>
+            Machine hourly records
+          </h4>
         </div>
 
         <div className="flex flex-wrap gap-2">
-          <div className={`inline-flex items-center border px-3 py-2 text-xs font-semibold ${t.badge}`}>
+          <div
+            className={`inline-flex items-center border px-3 py-2 text-xs font-semibold ${t.badge}`}
+          >
             Showing {resultCount} machine{resultCount !== 1 ? "s" : ""}
           </div>
 
@@ -506,7 +633,9 @@ function FilterBar({
       <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-9">
         <select
           value={filters.hall}
-          onChange={(e) => setFilters((prev) => ({ ...prev, hall: e.target.value }))}
+          onChange={(e) =>
+            setFilters((prev) => ({ ...prev, hall: e.target.value }))
+          }
           className={`h-11 border px-3 text-sm outline-none ${t.input}`}
         >
           <option value="">All Halls</option>
@@ -519,7 +648,9 @@ function FilterBar({
 
         <select
           value={filters.shift}
-          onChange={(e) => setFilters((prev) => ({ ...prev, shift: e.target.value }))}
+          onChange={(e) =>
+            setFilters((prev) => ({ ...prev, shift: e.target.value }))
+          }
           className={`h-11 border px-3 text-sm outline-none ${t.input}`}
         >
           <option value="">All Shifts</option>
@@ -532,7 +663,9 @@ function FilterBar({
 
         <select
           value={filters.machine}
-          onChange={(e) => setFilters((prev) => ({ ...prev, machine: e.target.value }))}
+          onChange={(e) =>
+            setFilters((prev) => ({ ...prev, machine: e.target.value }))
+          }
           className={`h-11 border px-3 text-sm outline-none ${t.input}`}
         >
           <option value="">All Machines</option>
@@ -547,27 +680,35 @@ function FilterBar({
           type="text"
           placeholder="Search operator, part, code"
           value={filters.search}
-          onChange={(e) => setFilters((prev) => ({ ...prev, search: e.target.value }))}
+          onChange={(e) =>
+            setFilters((prev) => ({ ...prev, search: e.target.value }))
+          }
           className={`h-11 border px-3 text-sm outline-none ${t.input}`}
         />
 
         <input
           type="date"
           value={filters.fromDate}
-          onChange={(e) => setFilters((prev) => ({ ...prev, fromDate: e.target.value }))}
+          onChange={(e) =>
+            setFilters((prev) => ({ ...prev, fromDate: e.target.value }))
+          }
           className={`h-11 border px-3 text-sm outline-none ${t.input}`}
         />
 
         <input
           type="date"
           value={filters.toDate}
-          onChange={(e) => setFilters((prev) => ({ ...prev, toDate: e.target.value }))}
+          onChange={(e) =>
+            setFilters((prev) => ({ ...prev, toDate: e.target.value }))
+          }
           className={`h-11 border px-3 text-sm outline-none ${t.input}`}
         />
 
         <select
           value={filters.sortBy}
-          onChange={(e) => setFilters((prev) => ({ ...prev, sortBy: e.target.value }))}
+          onChange={(e) =>
+            setFilters((prev) => ({ ...prev, sortBy: e.target.value }))
+          }
           className={`h-11 border px-3 text-sm outline-none ${t.input}`}
         >
           <option value="machine">Sort: Machine</option>
@@ -580,7 +721,9 @@ function FilterBar({
 
         <select
           value={filters.chartMode}
-          onChange={(e) => setFilters((prev) => ({ ...prev, chartMode: e.target.value }))}
+          onChange={(e) =>
+            setFilters((prev) => ({ ...prev, chartMode: e.target.value }))
+          }
           className={`h-11 border px-3 text-sm outline-none ${t.input}`}
         >
           <option value="mixed">Mode: Mixed</option>
@@ -590,7 +733,9 @@ function FilterBar({
 
         <select
           value={filters.density}
-          onChange={(e) => setFilters((prev) => ({ ...prev, density: e.target.value }))}
+          onChange={(e) =>
+            setFilters((prev) => ({ ...prev, density: e.target.value }))
+          }
           className={`h-11 border px-3 text-sm outline-none ${t.input}`}
         >
           <option value="comfortable">View: Comfortable</option>
@@ -605,7 +750,9 @@ function RejectionReasonsBlock({ machine, theme = "light" }) {
   const t = getThemeTokens(theme);
 
   const reasonMap = machine.data.reduce((acc, row) => {
-    const reasons = Array.isArray(row.rejectBreakdown) ? row.rejectBreakdown : [];
+    const reasons = Array.isArray(row.rejectBreakdown)
+      ? row.rejectBreakdown
+      : [];
 
     reasons.forEach((item) => {
       const reason = item?.reason || "Other";
@@ -614,7 +761,8 @@ function RejectionReasonsBlock({ machine, theme = "light" }) {
     });
 
     if (!reasons.length && toNumber(row.reject) > 0 && row.rejectReason) {
-      acc[row.rejectReason] = (acc[row.rejectReason] || 0) + toNumber(row.reject);
+      acc[row.rejectReason] =
+        (acc[row.rejectReason] || 0) + toNumber(row.reject);
     }
 
     return acc;
@@ -627,7 +775,9 @@ function RejectionReasonsBlock({ machine, theme = "light" }) {
   return (
     <div className={`mt-4 border px-4 py-3 ${t.softBg} ${t.border}`}>
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className={`text-[11px] uppercase tracking-[0.16em] font-bold ${t.muted}`}>
+        <p
+          className={`text-[11px] uppercase tracking-[0.16em] font-bold ${t.muted}`}
+        >
           Rejection Reasons
         </p>
         <span className={`border px-2 py-1 text-xs font-semibold ${t.badge}`}>
@@ -637,7 +787,10 @@ function RejectionReasonsBlock({ machine, theme = "light" }) {
 
       <div className="mt-3 flex flex-wrap gap-2">
         {entries.map(([reason, qty]) => (
-          <span key={reason} className={`border px-3 py-1 text-xs font-semibold ${t.chip}`}>
+          <span
+            key={reason}
+            className={`border px-3 py-1 text-xs font-semibold ${t.chip}`}
+          >
             {reason}: {formatNumber(qty)}
           </span>
         ))}
@@ -650,7 +803,9 @@ function LossTimeBlock({ machine, theme = "light" }) {
   const t = getThemeTokens(theme);
 
   const breakdownMap = machine.data.reduce((acc, row) => {
-    const items = Array.isArray(row.lossTimeBreakdown) ? row.lossTimeBreakdown : [];
+    const items = Array.isArray(row.lossTimeBreakdown)
+      ? row.lossTimeBreakdown
+      : [];
 
     items.forEach((item) => {
       const key = item?.reason || "Other";
@@ -665,7 +820,9 @@ function LossTimeBlock({ machine, theme = "light" }) {
       acc[key].minutes += minutes;
 
       if (item?.person) {
-        const personLabel = item?.department ? `${item.person} (${item.department})` : item.person;
+        const personLabel = item?.department
+          ? `${item.person} (${item.department})`
+          : item.person;
         acc[key].persons.add(personLabel);
       }
     });
@@ -680,7 +837,9 @@ function LossTimeBlock({ machine, theme = "light" }) {
   return (
     <div className={`mt-4 border px-4 py-3 ${t.softBg} ${t.border}`}>
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className={`text-[11px] uppercase tracking-[0.16em] font-bold ${t.muted}`}>
+        <p
+          className={`text-[11px] uppercase tracking-[0.16em] font-bold ${t.muted}`}
+        >
           Loss Time Breakdown
         </p>
         <span className={`border px-2 py-1 text-xs font-semibold ${t.badge}`}>
@@ -690,10 +849,15 @@ function LossTimeBlock({ machine, theme = "light" }) {
 
       <div className="mt-3 grid gap-3 md:grid-cols-2">
         {entries.map((item) => (
-          <div key={item.reason} className={`border px-3 py-3 ${t.panelBg} ${t.border}`}>
+          <div
+            key={item.reason}
+            className={`border px-3 py-3 ${t.panelBg} ${t.border}`}
+          >
             <div className="flex items-start justify-between gap-3">
               <div>
-                <p className={`text-sm font-semibold ${t.title}`}>{item.reason}</p>
+                <p className={`text-sm font-semibold ${t.title}`}>
+                  {item.reason}
+                </p>
                 {item.persons.size ? (
                   <p className={`mt-2 text-xs leading-5 ${t.muted}`}>
                     {Array.from(item.persons).join(", ")}
@@ -702,10 +866,14 @@ function LossTimeBlock({ machine, theme = "light" }) {
               </div>
 
               <div className="flex flex-col gap-2">
-                <span className={`border px-2 py-1 text-xs font-bold ${t.badge}`}>
+                <span
+                  className={`border px-2 py-1 text-xs font-bold ${t.badge}`}
+                >
                   Qty {formatNumber(item.qty)}
                 </span>
-                <span className={`border px-2 py-1 text-xs font-bold ${t.badge}`}>
+                <span
+                  className={`border px-2 py-1 text-xs font-bold ${t.badge}`}
+                >
                   Min {formatNumber(item.minutes)}
                 </span>
               </div>
@@ -726,27 +894,47 @@ function MachineMeta({ machine, theme = "light" }) {
     return bValue - aValue;
   })[0];
 
-  const bestHour = [...machine.data].sort((a, b) => toNumber(b.actual) - toNumber(a.actual))[0];
-  const worstRejectHour = [...machine.data].sort((a, b) => toNumber(b.reject) - toNumber(a.reject))[0];
+  const bestHour = [...machine.data].sort(
+    (a, b) => toNumber(b.actual) - toNumber(a.actual),
+  )[0];
+  const worstRejectHour = [...machine.data].sort(
+    (a, b) => toNumber(b.reject) - toNumber(a.reject),
+  )[0];
 
   return (
     <div className="mb-4 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
       <div className={`border px-3 py-3 ${t.softBg} ${t.border}`}>
-        <p className={`text-[10px] uppercase tracking-[0.16em] font-bold ${t.muted}`}>Machine</p>
-        <p className={`mt-1 text-sm font-semibold ${t.title}`}>{machine.machine || "-"}</p>
+        <p
+          className={`text-[10px] uppercase tracking-[0.16em] font-bold ${t.muted}`}
+        >
+          Machine
+        </p>
+        <p className={`mt-1 text-sm font-semibold ${t.title}`}>
+          {machine.machine || "-"}
+        </p>
         <p className={`mt-1 text-xs ${t.muted}`}>
           Code {machine.machineCode || "-"} · Name {machine.machineName || "-"}
         </p>
       </div>
 
       <div className={`border px-3 py-3 ${t.softBg} ${t.border}`}>
-        <p className={`text-[10px] uppercase tracking-[0.16em] font-bold ${t.muted}`}>Operator</p>
-        <p className={`mt-1 text-sm font-semibold ${t.title}`}>{machine.operator || "-"}</p>
-        <p className={`mt-1 text-xs ${t.muted}`}>ID {machine.operatorId || "-"}</p>
+        <p
+          className={`text-[10px] uppercase tracking-[0.16em] font-bold ${t.muted}`}
+        >
+          Operator
+        </p>
+        <p className={`mt-1 text-sm font-semibold ${t.title}`}>
+          {machine.operator || "-"}
+        </p>
+        <p className={`mt-1 text-xs ${t.muted}`}>
+          ID {machine.operatorId || "-"}
+        </p>
       </div>
 
       <div className={`border px-3 py-3 ${t.softBg} ${t.border}`}>
-        <p className={`text-[10px] uppercase tracking-[0.16em] font-bold ${t.muted}`}>
+        <p
+          className={`text-[10px] uppercase tracking-[0.16em] font-bold ${t.muted}`}
+        >
           Production Context
         </p>
         <p className={`mt-1 text-sm font-semibold ${t.title}`}>
@@ -756,15 +944,23 @@ function MachineMeta({ machine, theme = "light" }) {
       </div>
 
       <div className={`border px-3 py-3 ${t.softBg} ${t.border}`}>
-        <p className={`text-[10px] uppercase tracking-[0.16em] font-bold ${t.muted}`}>Best Hour</p>
-        <p className={`mt-1 text-sm font-semibold ${t.title}`}>{bestHour?.hour || "-"}</p>
+        <p
+          className={`text-[10px] uppercase tracking-[0.16em] font-bold ${t.muted}`}
+        >
+          Best Hour
+        </p>
+        <p className={`mt-1 text-sm font-semibold ${t.title}`}>
+          {bestHour?.hour || "-"}
+        </p>
         <p className={`mt-1 text-xs ${t.muted}`}>
           Actual {formatNumber(bestHour?.actual || 0)}
         </p>
       </div>
 
       <div className={`border px-3 py-3 ${t.softBg} ${t.border}`}>
-        <p className={`text-[10px] uppercase tracking-[0.16em] font-bold ${t.muted}`}>
+        <p
+          className={`text-[10px] uppercase tracking-[0.16em] font-bold ${t.muted}`}
+        >
           Latest / Highest Reject
         </p>
         <p className={`mt-1 text-sm font-semibold ${t.title}`}>
@@ -778,7 +974,10 @@ function MachineMeta({ machine, theme = "light" }) {
   );
 }
 
-export default function MachineHourlyChart({ machineHourlyTrend, theme = "light" }) {
+export default function MachineHourlyChart({
+  machineHourlyTrend,
+  theme = "light",
+}) {
   const t = getThemeTokens(theme);
 
   const [filters, setFilters] = useState({
@@ -795,22 +994,35 @@ export default function MachineHourlyChart({ machineHourlyTrend, theme = "light"
 
   const normalizedMachines = useMemo(
     () => normalizeMachineHourlyTrendShape(machineHourlyTrend),
-    [machineHourlyTrend]
+    [machineHourlyTrend],
   );
 
   const hallOptions = useMemo(
-    () => [...new Set(normalizedMachines.map((item) => item.hall).filter(Boolean))].sort(),
-    [normalizedMachines]
+    () =>
+      [
+        ...new Set(normalizedMachines.map((item) => item.hall).filter(Boolean)),
+      ].sort(),
+    [normalizedMachines],
   );
 
   const shiftOptions = useMemo(
-    () => [...new Set(normalizedMachines.map((item) => item.shift).filter(Boolean))].sort(),
-    [normalizedMachines]
+    () =>
+      [
+        ...new Set(
+          normalizedMachines.map((item) => item.shift).filter(Boolean),
+        ),
+      ].sort(),
+    [normalizedMachines],
   );
 
   const machineOptions = useMemo(
-    () => [...new Set(normalizedMachines.map((item) => item.machine).filter(Boolean))].sort(),
-    [normalizedMachines]
+    () =>
+      [
+        ...new Set(
+          normalizedMachines.map((item) => item.machine).filter(Boolean),
+        ),
+      ].sort(),
+    [normalizedMachines],
   );
 
   const filteredMachines = useMemo(() => {
@@ -818,14 +1030,17 @@ export default function MachineHourlyChart({ machineHourlyTrend, theme = "light"
 
     const list = normalizedMachines
       .map((item) => {
-        const filteredRows = item.data.filter((row) => isRowInDateRange(row, filters.fromDate, filters.toDate));
+        const filteredRows = item.data.filter((row) =>
+          isRowInDateRange(row, filters.fromDate, filters.toDate),
+        );
         return { ...item, data: filteredRows };
       })
       .filter((item) => item.data.length > 0)
       .filter((item) => {
         const matchesHall = !filters.hall || item.hall === filters.hall;
         const matchesShift = !filters.shift || item.shift === filters.shift;
-        const matchesMachine = !filters.machine || item.machine === filters.machine;
+        const matchesMachine =
+          !filters.machine || item.machine === filters.machine;
 
         const haystack = [
           item.machine,
@@ -855,14 +1070,18 @@ export default function MachineHourlyChart({ machineHourlyTrend, theme = "light"
           acc.lossMinutes += toNumber(row.lossMinutes);
           return acc;
         },
-        { actual: 0, reject: 0, lossTime: 0, lossMinutes: 0 }
+        { actual: 0, reject: 0, lossTime: 0, lossMinutes: 0 },
       );
 
     list.sort((a, b) => {
-      if (filters.sortBy === "actualDesc") return getTotals(b).actual - getTotals(a).actual;
-      if (filters.sortBy === "rejectDesc") return getTotals(b).reject - getTotals(a).reject;
-      if (filters.sortBy === "lossTimeDesc") return getTotals(b).lossTime - getTotals(a).lossTime;
-      if (filters.sortBy === "lossMinutesDesc") return getTotals(b).lossMinutes - getTotals(a).lossMinutes;
+      if (filters.sortBy === "actualDesc")
+        return getTotals(b).actual - getTotals(a).actual;
+      if (filters.sortBy === "rejectDesc")
+        return getTotals(b).reject - getTotals(a).reject;
+      if (filters.sortBy === "lossTimeDesc")
+        return getTotals(b).lossTime - getTotals(a).lossTime;
+      if (filters.sortBy === "lossMinutesDesc")
+        return getTotals(b).lossMinutes - getTotals(a).lossMinutes;
       if (filters.sortBy === "hoursDesc") return b.data.length - a.data.length;
       return String(a.machine).localeCompare(String(b.machine));
     });
@@ -873,9 +1092,12 @@ export default function MachineHourlyChart({ machineHourlyTrend, theme = "light"
   if (!normalizedMachines?.length) {
     return (
       <section className={`border p-5 ${t.sectionBg} ${t.border}`}>
-        <h3 className={`text-lg font-bold ${t.title}`}>Machine Wise Hourly Graph</h3>
+        <h3 className={`text-lg font-bold ${t.title}`}>
+          Machine Wise Hourly Graph
+        </h3>
         <p className={`mt-1 text-sm ${t.muted}`}>
-          Selected filters ke hisab se koi machine hourly data available nahi hai.
+          Selected filters ke hisab se koi machine hourly data available nahi
+          hai.
         </p>
       </section>
     );
@@ -884,14 +1106,18 @@ export default function MachineHourlyChart({ machineHourlyTrend, theme = "light"
   return (
     <section className={`border p-4 md:p-5 ${t.sectionBg} ${t.border}`}>
       <div className="mb-4">
-        <p className="text-xs uppercase tracking-[0.2em] font-bold" style={{ color: t.actual }}>
+        <p
+          className="text-xs uppercase tracking-[0.2em] font-bold"
+          style={{ color: t.actual }}
+        >
           Hourly Analysis
         </p>
         <h3 className={`mt-2 text-lg md:text-xl font-bold ${t.title}`}>
           Machine Wise Hourly Graph
         </h3>
         <p className={`mt-2 text-sm ${t.muted}`}>
-          Actual, good, reject, target, loss qty aur loss minutes ko machine-wise compare karo with detailed breakdown.
+          Actual, good, reject, target, loss qty aur loss minutes ko
+          machine-wise compare karo with detailed breakdown.
         </p>
       </div>
 
@@ -923,13 +1149,19 @@ export default function MachineHourlyChart({ machineHourlyTrend, theme = "light"
 
         {filteredMachines.length === 0 ? (
           <div className={`border p-8 text-center ${t.softBg} ${t.border}`}>
-            <h4 className={`text-base font-bold ${t.title}`}>No matching records</h4>
+            <h4 className={`text-base font-bold ${t.title}`}>
+              No matching records
+            </h4>
             <p className={`mt-2 text-sm ${t.muted}`}>
               Current filters ke hisaab se koi machine data match nahi hua.
             </p>
           </div>
         ) : (
-          <div className={filters.density === "compact" ? "space-y-3" : "space-y-5"}>
+          <div
+            className={
+              filters.density === "compact" ? "space-y-3" : "space-y-5"
+            }
+          >
             {filteredMachines.map((machineItem) => {
               const chartHeight =
                 filters.density === "compact"
@@ -944,21 +1176,31 @@ export default function MachineHourlyChart({ machineHourlyTrend, theme = "light"
                   <div className="mb-4 flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
                     <div>
                       <div className="flex flex-wrap items-center gap-2">
-                        <h4 className={`text-base md:text-lg font-bold ${t.title}`}>
+                        <h4
+                          className={`text-base md:text-lg font-bold ${t.title}`}
+                        >
                           {machineItem.machine}
                         </h4>
-                        <span className={`border px-3 py-1 text-xs font-semibold ${t.badge}`}>
+                        <span
+                          className={`border px-3 py-1 text-xs font-semibold ${t.badge}`}
+                        >
                           {machineItem.hall}
                         </span>
                         {machineItem.machineCode ? (
-                          <span className={`border px-3 py-1 text-xs font-semibold ${t.chip}`}>
+                          <span
+                            className={`border px-3 py-1 text-xs font-semibold ${t.chip}`}
+                          >
                             Code {machineItem.machineCode}
                           </span>
                         ) : null}
                       </div>
 
-                      <div className={`mt-2 flex flex-wrap gap-2 text-xs ${t.muted}`}>
-                        <span className={`border px-3 py-1 ${t.chip}`}>{machineItem.shift} Shift</span>
+                      <div
+                        className={`mt-2 flex flex-wrap gap-2 text-xs ${t.muted}`}
+                      >
+                        <span className={`border px-3 py-1 ${t.chip}`}>
+                          {machineItem.shift} Shift
+                        </span>
                         <span className={`border px-3 py-1 ${t.chip}`}>
                           Operator {machineItem.operator || "-"}
                         </span>
@@ -968,33 +1210,70 @@ export default function MachineHourlyChart({ machineHourlyTrend, theme = "light"
                         <span className={`border px-3 py-1 ${t.chip}`}>
                           Part {machineItem.part || "-"}
                         </span>
-                        {machineItem.data[0]?.createdAt || machineItem.data[0]?.date ? (
+                        {machineItem.data[0]?.createdAt ||
+                        machineItem.data[0]?.date ? (
                           <span className={`border px-3 py-1 ${t.chip}`}>
-                            From {toDateInputValue(machineItem.data[0]?.createdAt || machineItem.data[0]?.date)}
+                            From{" "}
+                            {toDateInputValue(
+                              machineItem.data[0]?.createdAt ||
+                                machineItem.data[0]?.date,
+                            )}
                           </span>
                         ) : null}
                       </div>
                     </div>
 
                     <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                      <div className={`border px-4 py-3 ${t.softBg} ${t.border}`}>
-                        <p className={`text-[11px] uppercase tracking-[0.14em] ${t.muted}`}>Logged Hours</p>
-                        <p className={`mt-1 text-base font-bold ${t.title}`}>{machineItem.data.length}</p>
+                      <div
+                        className={`border px-4 py-3 ${t.softBg} ${t.border}`}
+                      >
+                        <p
+                          className={`text-[11px] uppercase tracking-[0.14em] ${t.muted}`}
+                        >
+                          Logged Hours
+                        </p>
+                        <p className={`mt-1 text-base font-bold ${t.title}`}>
+                          {machineItem.data.length}
+                        </p>
                       </div>
 
-                      <div className={`border px-4 py-3 ${t.softBg} ${t.border}`}>
-                        <p className={`text-[11px] uppercase tracking-[0.14em] ${t.muted}`}>Mode</p>
-                        <p className={`mt-1 text-base font-bold ${t.title}`}>{filters.chartMode}</p>
+                      <div
+                        className={`border px-4 py-3 ${t.softBg} ${t.border}`}
+                      >
+                        <p
+                          className={`text-[11px] uppercase tracking-[0.14em] ${t.muted}`}
+                        >
+                          Mode
+                        </p>
+                        <p className={`mt-1 text-base font-bold ${t.title}`}>
+                          {filters.chartMode}
+                        </p>
                       </div>
 
-                      <div className={`border px-4 py-3 ${t.softBg} ${t.border}`}>
-                        <p className={`text-[11px] uppercase tracking-[0.14em] ${t.muted}`}>View</p>
-                        <p className={`mt-1 text-base font-bold ${t.title}`}>{filters.density}</p>
+                      <div
+                        className={`border px-4 py-3 ${t.softBg} ${t.border}`}
+                      >
+                        <p
+                          className={`text-[11px] uppercase tracking-[0.14em] ${t.muted}`}
+                        >
+                          View
+                        </p>
+                        <p className={`mt-1 text-base font-bold ${t.title}`}>
+                          {filters.density}
+                        </p>
                       </div>
 
-                      <div className={`border px-4 py-3 ${t.softBg} ${t.border}`}>
-                        <p className={`text-[11px] uppercase tracking-[0.14em] ${t.muted}`}>Points</p>
-                        <p className={`mt-1 text-base font-bold ${t.title}`}>{machineItem.data.length}</p>
+                      <div
+                        className={`border px-4 py-3 ${t.softBg} ${t.border}`}
+                      >
+                        <p
+                          className={`text-[11px] uppercase tracking-[0.14em] ${t.muted}`}
+                        >
+                          Points
+                        </p>
+                        <p className={`mt-1 text-base font-bold ${t.title}`}>
+                          {machineItem.data.length}
+                        </p>
                       </div>
                     </div>
                   </div>
@@ -1007,9 +1286,12 @@ export default function MachineHourlyChart({ machineHourlyTrend, theme = "light"
                       <ResponsiveContainer width="100%" height="100%">
                         <ComposedChart
                           data={machineItem.data}
-                          margin={{ top: 10, right: 10, left: -20, bottom: 10 }}
+                          margin={{ top: 40, right: 20, left: 0, bottom: 20 }}
                         >
-                          <CartesianGrid strokeDasharray="2 2" stroke={t.grid} />
+                          <CartesianGrid
+                            strokeDasharray="2 2"
+                            stroke={t.grid}
+                          />
 
                           <XAxis
                             dataKey="hour"
@@ -1019,7 +1301,9 @@ export default function MachineHourlyChart({ machineHourlyTrend, theme = "light"
                             tickLine={{ stroke: t.grid }}
                             interval={0}
                             angle={machineItem.data.length > 8 ? -20 : 0}
-                            textAnchor={machineItem.data.length > 8 ? "end" : "middle"}
+                            textAnchor={
+                              machineItem.data.length > 8 ? "end" : "middle"
+                            }
                             height={machineItem.data.length > 8 ? 50 : 30}
                           />
 
@@ -1029,33 +1313,61 @@ export default function MachineHourlyChart({ machineHourlyTrend, theme = "light"
                             axisLine={{ stroke: t.grid }}
                             tickLine={{ stroke: t.grid }}
                             allowDecimals={false}
+                            domain={[0, "dataMax + 50"]}
                           />
-
                           <Tooltip content={<CustomTooltip theme={theme} />} />
                           <Legend wrapperStyle={{ fontSize: "12px" }} />
 
-                          {(filters.chartMode === "mixed" || filters.chartMode === "bars") && (
-                            <Bar dataKey="actual" name="Actual" radius={[2, 2, 0, 0]} barSize={16}>
-                              {machineItem.data.map((entry, index) => (
-                                <Cell
-                                  key={`actual-cell-${index}`}
-                                  fill={getPerformanceColor(entry.actual, entry.target, theme)}
-                                />
-                              ))}
+                          {(filters.chartMode === "mixed" ||
+                            filters.chartMode === "bars") && (
+                            <Bar
+                              dataKey="actual"
+                              name="Actual"
+                              radius={[2, 2, 0, 0]}
+                              barSize={16}
+                              fill={t.actual}
+                            >
+                              <LabelList
+                                dataKey="actual"
+                                position="top"
+                                style={{
+                                  fill:
+                                    t.title === "text-slate-100"
+                                      ? "#ffffff"
+                                      : "#000000",
+                                  fontSize: 11,
+                                  fontWeight: 700,
+                                }}
+                              />
                             </Bar>
                           )}
 
-                          {(filters.chartMode === "mixed" || filters.chartMode === "bars") && (
+                          {(filters.chartMode === "mixed" ||
+                            filters.chartMode === "bars") && (
                             <Bar
                               dataKey="good"
                               name="Good"
                               radius={[2, 2, 0, 0]}
                               barSize={12}
                               fill={t.good}
-                            />
+                            >
+                              <LabelList
+                                dataKey="good"
+                                position="top"
+                                style={{
+                                  fill:
+                                    t.title === "text-slate-100"
+                                      ? "#ffffff"
+                                      : "#000000",
+                                  fontSize: 10,
+                                  fontWeight: 600,
+                                }}
+                              />
+                            </Bar>
                           )}
 
-                          {(filters.chartMode === "mixed" || filters.chartMode === "lines") && (
+                          {(filters.chartMode === "mixed" ||
+                            filters.chartMode === "lines") && (
                             <Line
                               type="monotone"
                               dataKey="reject"
@@ -1067,7 +1379,8 @@ export default function MachineHourlyChart({ machineHourlyTrend, theme = "light"
                             />
                           )}
 
-                          {(filters.chartMode === "mixed" || filters.chartMode === "lines") && (
+                          {(filters.chartMode === "mixed" ||
+                            filters.chartMode === "lines") && (
                             <Line
                               type="monotone"
                               dataKey="target"
@@ -1076,10 +1389,36 @@ export default function MachineHourlyChart({ machineHourlyTrend, theme = "light"
                               strokeWidth={2}
                               strokeDasharray="4 4"
                               dot={false}
-                            />
+                            >
+                              <LabelList
+                                dataKey="target"
+                                content={(props) => {
+                                  const { x, y, index } = props;
+                                  const middleIndex = Math.floor(
+                                    machineItem.data.length / 2,
+                                  );
+
+                                  if (index !== middleIndex) return null;
+
+                                  return (
+                                    <text
+                                      x={x}
+                                      y={y - 12}
+                                      textAnchor="middle"
+                                      fill={t.target}
+                                      fontSize={12}
+                                      fontWeight="700"
+                                    >
+                                      {props.value}
+                                    </text>
+                                  );
+                                }}
+                              />
+                            </Line>
                           )}
 
-                          {(filters.chartMode === "mixed" || filters.chartMode === "lines") && (
+                          {(filters.chartMode === "mixed" ||
+                            filters.chartMode === "lines") && (
                             <Line
                               type="monotone"
                               dataKey="lossTime"
@@ -1090,7 +1429,8 @@ export default function MachineHourlyChart({ machineHourlyTrend, theme = "light"
                             />
                           )}
 
-                          {(filters.chartMode === "mixed" || filters.chartMode === "lines") && (
+                          {(filters.chartMode === "mixed" ||
+                            filters.chartMode === "lines") && (
                             <Area
                               type="monotone"
                               dataKey="lossMinutes"

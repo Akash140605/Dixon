@@ -77,12 +77,12 @@ function SummaryCard({ label, value, tone = "default", helper }) {
     tone === "good"
       ? "text-emerald-700"
       : tone === "reject"
-      ? "text-rose-700"
-      : tone === "loss"
-      ? "text-orange-700"
-      : tone === "efficiency"
-      ? "text-sky-700"
-      : "text-slate-900";
+        ? "text-rose-700"
+        : tone === "loss"
+          ? "text-orange-700"
+          : tone === "efficiency"
+            ? "text-sky-700"
+            : "text-slate-900";
 
   return (
     <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3">
@@ -92,7 +92,9 @@ function SummaryCard({ label, value, tone = "default", helper }) {
       <p className={`mt-1 text-sm font-semibold tabular-nums ${toneClass}`}>
         {value}
       </p>
-      {helper ? <p className="mt-1 text-[11px] text-slate-500">{helper}</p> : null}
+      {helper ? (
+        <p className="mt-1 text-[11px] text-slate-500">{helper}</p>
+      ) : null}
     </div>
   );
 }
@@ -196,11 +198,15 @@ function EfficiencyTooltip({ active, payload, label }) {
         </div>
         <div className="flex items-center justify-between border-t border-slate-200 pt-2">
           <span>Actual</span>
-          <span className="font-semibold tabular-nums">{formatNumber(row.actual)}</span>
+          <span className="font-semibold tabular-nums">
+            {formatNumber(row.actual)}
+          </span>
         </div>
         <div className="flex items-center justify-between">
           <span>Target</span>
-          <span className="font-semibold tabular-nums">{formatNumber(row.target)}</span>
+          <span className="font-semibold tabular-nums">
+            {formatNumber(row.target)}
+          </span>
         </div>
         <div className="flex items-center justify-between">
           <span>Efficiency</span>
@@ -227,7 +233,9 @@ function RejectionTooltip({ active, payload, label }) {
       <div className="space-y-1 text-xs text-slate-700">
         <div className="flex items-center justify-between">
           <span>Total Reject</span>
-          <span className="font-semibold tabular-nums">{formatNumber(row.reject)}</span>
+          <span className="font-semibold tabular-nums">
+            {formatNumber(row.reject)}
+          </span>
         </div>
         <div className="flex items-center justify-between">
           <span>Reject %</span>
@@ -245,7 +253,9 @@ function RejectionTooltip({ active, payload, label }) {
               className="flex items-center justify-between gap-3 text-xs text-slate-700"
             >
               <span className="truncate">{reason}</span>
-              <span className="font-semibold tabular-nums">{formatNumber(value)}</span>
+              <span className="font-semibold tabular-nums">
+                {formatNumber(value)}
+              </span>
             </div>
           ))}
         </div>
@@ -274,7 +284,9 @@ function LossTooltip({ active, payload, label }) {
         </div>
         <div className="flex items-center justify-between">
           <span>Loss Qty</span>
-          <span className="font-semibold tabular-nums">{formatNumber(row.lossQty)}</span>
+          <span className="font-semibold tabular-nums">
+            {formatNumber(row.lossQty)}
+          </span>
         </div>
       </div>
 
@@ -340,15 +352,16 @@ function GenericTooltip({ active, payload, label }) {
 }
 
 function buildFilterOptions(rows, selectedHall, selectedMachine) {
-  const hallOptions = [...new Set(rows.map((row) => row.hall).filter(Boolean))].sort(
-    (a, b) => String(a).localeCompare(String(b)),
-  );
+  const hallOptions = [
+    ...new Set(rows.map((row) => row.hall).filter(Boolean)),
+  ].sort((a, b) => String(a).localeCompare(String(b)));
 
   const machineOptions = [
     ...new Set(
       rows
         .filter(
-          (row) => selectedHall === "all" || String(row.hall) === String(selectedHall),
+          (row) =>
+            selectedHall === "all" || String(row.hall) === String(selectedHall),
         )
         .map((row) => row.machine)
         .filter(Boolean),
@@ -359,11 +372,13 @@ function buildFilterOptions(rows, selectedHall, selectedMachine) {
     ...new Set(
       rows
         .filter(
-          (row) => selectedHall === "all" || String(row.hall) === String(selectedHall),
+          (row) =>
+            selectedHall === "all" || String(row.hall) === String(selectedHall),
         )
         .filter(
           (row) =>
-            selectedMachine === "all" || String(row.machine) === String(selectedMachine),
+            selectedMachine === "all" ||
+            String(row.machine) === String(selectedMachine),
         )
         .map((row) => row.part)
         .filter(Boolean),
@@ -375,12 +390,19 @@ function buildFilterOptions(rows, selectedHall, selectedMachine) {
 
 function filterRows(rows, filters) {
   return rows
-    .filter((row) => filters.hall === "all" || String(row.hall) === String(filters.hall))
     .filter(
       (row) =>
-        filters.machine === "all" || String(row.machine) === String(filters.machine),
+        filters.hall === "all" || String(row.hall) === String(filters.hall),
     )
-    .filter((row) => filters.part === "all" || String(row.part) === String(filters.part));
+    .filter(
+      (row) =>
+        filters.machine === "all" ||
+        String(row.machine) === String(filters.machine),
+    )
+    .filter(
+      (row) =>
+        filters.part === "all" || String(row.part) === String(filters.part),
+    );
 }
 
 function aggregateRows(rows, groupBy) {
@@ -474,7 +496,9 @@ export default function ProductionInsightsChart({
             target: toNumber(row.target),
             lossQty: toNumber(row.lossQty ?? row.lossTime ?? 0),
             lossMinutes: toNumber(row.lossMinutes ?? row.lossTimeMinutes ?? 0),
-            rejectBreakdown: Array.isArray(row.rejectBreakdown) ? row.rejectBreakdown : [],
+            rejectBreakdown: Array.isArray(row.rejectBreakdown)
+              ? row.rejectBreakdown
+              : [],
             lossTimeBreakdown: Array.isArray(row.lossTimeBreakdown)
               ? row.lossTimeBreakdown
               : [],
@@ -515,7 +539,9 @@ export default function ProductionInsightsChart({
           target: toNumber(row.target),
           lossQty: toNumber(row.lossQty ?? row.lossTime ?? 0),
           lossMinutes: toNumber(row.lossMinutes ?? row.lossTimeMinutes ?? 0),
-          rejectBreakdown: Array.isArray(row.rejectBreakdown) ? row.rejectBreakdown : [],
+          rejectBreakdown: Array.isArray(row.rejectBreakdown)
+            ? row.rejectBreakdown
+            : [],
           lossTimeBreakdown: Array.isArray(row.lossTimeBreakdown)
             ? row.lossTimeBreakdown
             : [],
@@ -548,7 +574,12 @@ export default function ProductionInsightsChart({
   });
 
   const overallOptions = useMemo(
-    () => buildFilterOptions(normalizedRows, overallFilters.hall, overallFilters.machine),
+    () =>
+      buildFilterOptions(
+        normalizedRows,
+        overallFilters.hall,
+        overallFilters.machine,
+      ),
     [normalizedRows, overallFilters.hall, overallFilters.machine],
   );
 
@@ -573,7 +604,8 @@ export default function ProductionInsightsChart({
   );
 
   const lossOptions = useMemo(
-    () => buildFilterOptions(normalizedRows, lossFilters.hall, lossFilters.machine),
+    () =>
+      buildFilterOptions(normalizedRows, lossFilters.hall, lossFilters.machine),
     [normalizedRows, lossFilters.hall, lossFilters.machine],
   );
 
@@ -597,7 +629,11 @@ export default function ProductionInsightsChart({
       efficiencyFilters.machine !== "all" &&
       !efficiencyOptions.machineOptions.includes(efficiencyFilters.machine)
     ) {
-      setEfficiencyFilters((prev) => ({ ...prev, machine: "all", part: "all" }));
+      setEfficiencyFilters((prev) => ({
+        ...prev,
+        machine: "all",
+        part: "all",
+      }));
     }
     if (
       efficiencyFilters.part !== "all" &&
@@ -659,11 +695,16 @@ export default function ProductionInsightsChart({
     [overallFilteredRows, overallFilters],
   );
   const efficiencyGroupedData = useMemo(
-    () => aggregateRows(efficiencyFilteredRows, getDefaultGroupBy(efficiencyFilters)),
+    () =>
+      aggregateRows(
+        efficiencyFilteredRows,
+        getDefaultGroupBy(efficiencyFilters),
+      ),
     [efficiencyFilteredRows, efficiencyFilters],
   );
   const rejectionGroupedData = useMemo(
-    () => aggregateRows(rejectionFilteredRows, getDefaultGroupBy(rejectionFilters)),
+    () =>
+      aggregateRows(rejectionFilteredRows, getDefaultGroupBy(rejectionFilters)),
     [rejectionFilteredRows, rejectionFilters],
   );
   const lossGroupedData = useMemo(
@@ -720,12 +761,18 @@ export default function ProductionInsightsChart({
   }, [lossGroupedData]);
 
   const rejectionOverviewData = useMemo(
-    () => [...rejectionGroupedData].sort((a, b) => toNumber(b.reject) - toNumber(a.reject)),
+    () =>
+      [...rejectionGroupedData].sort(
+        (a, b) => toNumber(b.reject) - toNumber(a.reject),
+      ),
     [rejectionGroupedData],
   );
 
   const lossOverviewData = useMemo(
-    () => [...lossGroupedData].sort((a, b) => toNumber(b.lossMinutes) - toNumber(a.lossMinutes)),
+    () =>
+      [...lossGroupedData].sort(
+        (a, b) => toNumber(b.lossMinutes) - toNumber(a.lossMinutes),
+      ),
     [lossGroupedData],
   );
 
@@ -771,10 +818,26 @@ export default function ProductionInsightsChart({
 
       <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-6">
         <SummaryCard label="Actual" value={formatNumber(summary.actual)} />
-        <SummaryCard label="Good" value={formatNumber(summary.good)} tone="good" />
-        <SummaryCard label="Reject" value={formatNumber(summary.reject)} tone="reject" />
-        <SummaryCard label="Loss Qty" value={formatNumber(summary.lossQty)} tone="loss" />
-        <SummaryCard label="Loss Min" value={formatNumber(summary.lossMinutes)} tone="loss" />
+        <SummaryCard
+          label="Good"
+          value={formatNumber(summary.good)}
+          tone="good"
+        />
+        <SummaryCard
+          label="Reject"
+          value={formatNumber(summary.reject)}
+          tone="reject"
+        />
+        <SummaryCard
+          label="Loss Qty"
+          value={formatNumber(summary.lossQty)}
+          tone="loss"
+        />
+        <SummaryCard
+          label="Loss Min"
+          value={formatNumber(summary.lossMinutes)}
+          tone="loss"
+        />
         <SummaryCard
           label="Efficiency"
           value={`${summary.efficiency.toFixed(1)}%`}
@@ -795,7 +858,11 @@ export default function ProductionInsightsChart({
             machineOptions={overallOptions.machineOptions}
             partOptions={overallOptions.partOptions}
             onHallChange={(e) =>
-              setOverallFilters({ hall: e.target.value, machine: "all", part: "all" })
+              setOverallFilters({
+                hall: e.target.value,
+                machine: "all",
+                part: "all",
+              })
             }
             onMachineChange={(e) =>
               setOverallFilters((prev) => ({
@@ -811,68 +878,145 @@ export default function ProductionInsightsChart({
           />
 
           <div style={{ height: 340 }} className="w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart
-                data={[...overallGroupedData].sort(
-                  (a, b) => toNumber(b.target) - toNumber(a.target),
-                )}
-                margin={{ top: 16, right: 12, left: 0, bottom: 8 }}
-                barCategoryGap={22}
-                barGap={4}
-              >
-                <CartesianGrid
-                  stroke={INDUSTRY_COLORS.grid}
-                  strokeDasharray="3 3"
-                  vertical={false}
-                />
-                <XAxis
-                  dataKey="shortLabel"
-                  interval={0}
-                  angle={overallGroupedData.length > 8 ? -20 : 0}
-                  textAnchor={overallGroupedData.length > 8 ? "end" : "middle"}
-                  height={overallGroupedData.length > 8 ? 56 : 34}
-                  tick={{ fontSize: 11, fill: INDUSTRY_COLORS.textMuted }}
-                />
-                <YAxis
-                  width={64}
-                  tick={{ fontSize: 11, fill: INDUSTRY_COLORS.textMuted }}
-                />
-                <Tooltip content={<GenericTooltip />} />
-                <Legend />
-                <Bar
-                  dataKey="target"
-                  name="Target"
-                  fill={INDUSTRY_COLORS.target}
-                  radius={[4, 4, 0, 0]}
-                  barSize={COMPACT_BAR_SIZE}
-                  maxBarSize={COMPACT_BAR_SIZE}
-                />
-                <Bar
-                  dataKey="good"
-                  name="Good"
-                  fill={INDUSTRY_COLORS.good}
-                  radius={[4, 4, 0, 0]}
-                  barSize={COMPACT_BAR_SIZE}
-                  maxBarSize={COMPACT_BAR_SIZE}
-                />
-                <Bar
-                  dataKey="reject"
-                  name="Reject"
-                  fill={INDUSTRY_COLORS.reject}
-                  radius={[4, 4, 0, 0]}
-                  barSize={COMPACT_BAR_SIZE}
-                  maxBarSize={COMPACT_BAR_SIZE}
-                />
-                <Bar
-                  dataKey="lossMinutes"
-                  name="Loss Minutes"
-                  fill={INDUSTRY_COLORS.loss}
-                  radius={[4, 4, 0, 0]}
-                  barSize={COMPACT_BAR_SIZE}
-                  maxBarSize={COMPACT_BAR_SIZE}
-                />
-              </BarChart>
-            </ResponsiveContainer>
+         <ResponsiveContainer width="100%" height="100%">
+  <BarChart
+    data={[...overallGroupedData].sort(
+      (a, b) => toNumber(b.target) - toNumber(a.target),
+    )}
+    margin={{
+      top: 45,
+      right: 12,
+      left: 0,
+      bottom: 8,
+    }}
+    barCategoryGap={22}
+    barGap={4}
+  >
+    <CartesianGrid
+      stroke={INDUSTRY_COLORS.grid}
+      strokeDasharray="3 3"
+      vertical={false}
+    />
+
+    <XAxis
+      dataKey="shortLabel"
+      interval={0}
+      angle={overallGroupedData.length > 8 ? -20 : 0}
+      textAnchor={
+        overallGroupedData.length > 8 ? "end" : "middle"
+      }
+      height={overallGroupedData.length > 8 ? 56 : 34}
+      tick={{
+        fontSize: 11,
+        fill: INDUSTRY_COLORS.textMuted,
+      }}
+    />
+
+    <YAxis
+      width={64}
+      domain={[0, "dataMax + 50"]}
+      tick={{
+        fontSize: 11,
+        fill: INDUSTRY_COLORS.textMuted,
+      }}
+    />
+
+    <Tooltip content={<GenericTooltip />} />
+    <Legend />
+
+    <Bar
+      dataKey="target"
+      name="Target"
+      fill={INDUSTRY_COLORS.target}
+      radius={[4, 4, 0, 0]}
+      barSize={COMPACT_BAR_SIZE}
+      maxBarSize={COMPACT_BAR_SIZE}
+    >
+      <LabelList
+        dataKey="target"
+        position="top"
+        offset={8}
+        formatter={(value) =>
+          value > 0 ? formatNumber(value) : ""
+        }
+        style={{
+          fill: INDUSTRY_COLORS.target,
+          fontSize: 11,
+          fontWeight: 700,
+        }}
+      />
+    </Bar>
+
+    <Bar
+      dataKey="good"
+      name="Good"
+      fill={INDUSTRY_COLORS.good}
+      radius={[4, 4, 0, 0]}
+      barSize={COMPACT_BAR_SIZE}
+      maxBarSize={COMPACT_BAR_SIZE}
+    >
+      <LabelList
+        dataKey="good"
+        position="top"
+        offset={8}
+        formatter={(value) =>
+          value > 0 ? formatNumber(value) : ""
+        }
+        style={{
+          fill: INDUSTRY_COLORS.good,
+          fontSize: 11,
+          fontWeight: 700,
+        }}
+      />
+    </Bar>
+
+    <Bar
+      dataKey="reject"
+      name="Reject"
+      fill={INDUSTRY_COLORS.reject}
+      radius={[4, 4, 0, 0]}
+      barSize={COMPACT_BAR_SIZE}
+      maxBarSize={COMPACT_BAR_SIZE}
+    >
+      <LabelList
+        dataKey="reject"
+        position="top"
+        offset={8}
+        formatter={(value) =>
+          value > 0 ? formatNumber(value) : ""
+        }
+        style={{
+          fill: INDUSTRY_COLORS.reject,
+          fontSize: 11,
+          fontWeight: 700,
+        }}
+      />
+    </Bar>
+
+    <Bar
+      dataKey="lossMinutes"
+      name="Loss Minutes"
+      fill={INDUSTRY_COLORS.loss}
+      radius={[4, 4, 0, 0]}
+      barSize={COMPACT_BAR_SIZE}
+      maxBarSize={COMPACT_BAR_SIZE}
+    >
+      <LabelList
+        dataKey="lossMinutes"
+        position="top"
+        offset={8}
+        formatter={(value) =>
+          value > 0 ? formatNumber(value) : ""
+        }
+        style={{
+          fill: INDUSTRY_COLORS.loss,
+          fontSize: 11,
+          fontWeight: 700,
+        }}
+      />
+    </Bar>
+  </BarChart>
+</ResponsiveContainer>
           </div>
         </div>
       ) : (
@@ -891,7 +1035,11 @@ export default function ProductionInsightsChart({
             machineOptions={efficiencyOptions.machineOptions}
             partOptions={efficiencyOptions.partOptions}
             onHallChange={(e) =>
-              setEfficiencyFilters({ hall: e.target.value, machine: "all", part: "all" })
+              setEfficiencyFilters({
+                hall: e.target.value,
+                machine: "all",
+                part: "all",
+              })
             }
             onMachineChange={(e) =>
               setEfficiencyFilters((prev) => ({
@@ -901,7 +1049,10 @@ export default function ProductionInsightsChart({
               }))
             }
             onPartChange={(e) =>
-              setEfficiencyFilters((prev) => ({ ...prev, part: e.target.value }))
+              setEfficiencyFilters((prev) => ({
+                ...prev,
+                part: e.target.value,
+              }))
             }
             rightText={`${efficiencyGroupedData.length} items`}
           />
@@ -925,7 +1076,9 @@ export default function ProductionInsightsChart({
                   dataKey="shortLabel"
                   interval={0}
                   angle={efficiencyGroupedData.length > 8 ? -20 : 0}
-                  textAnchor={efficiencyGroupedData.length > 8 ? "end" : "middle"}
+                  textAnchor={
+                    efficiencyGroupedData.length > 8 ? "end" : "middle"
+                  }
                   height={efficiencyGroupedData.length > 8 ? 56 : 34}
                   tick={{ fontSize: 11, fill: INDUSTRY_COLORS.textMuted }}
                 />
@@ -969,7 +1122,11 @@ export default function ProductionInsightsChart({
               machineOptions={rejectionOptions.machineOptions}
               partOptions={rejectionOptions.partOptions}
               onHallChange={(e) =>
-                setRejectionFilters({ hall: e.target.value, machine: "all", part: "all" })
+                setRejectionFilters({
+                  hall: e.target.value,
+                  machine: "all",
+                  part: "all",
+                })
               }
               onMachineChange={(e) =>
                 setRejectionFilters((prev) => ({
@@ -979,7 +1136,10 @@ export default function ProductionInsightsChart({
                 }))
               }
               onPartChange={(e) =>
-                setRejectionFilters((prev) => ({ ...prev, part: e.target.value }))
+                setRejectionFilters((prev) => ({
+                  ...prev,
+                  part: e.target.value,
+                }))
               }
               rightText={`${rejectionReasonData.length} reasons`}
             />
@@ -1001,11 +1161,15 @@ export default function ProductionInsightsChart({
                     dataKey="shortLabel"
                     interval={0}
                     angle={rejectionReasonData.length > 8 ? -20 : 0}
-                    textAnchor={rejectionReasonData.length > 8 ? "end" : "middle"}
+                    textAnchor={
+                      rejectionReasonData.length > 8 ? "end" : "middle"
+                    }
                     height={rejectionReasonData.length > 8 ? 56 : 34}
                     tick={{ fontSize: 11, fill: INDUSTRY_COLORS.textMuted }}
                   />
-                  <YAxis tick={{ fontSize: 11, fill: INDUSTRY_COLORS.textMuted }} />
+                  <YAxis
+                    tick={{ fontSize: 11, fill: INDUSTRY_COLORS.textMuted }}
+                  />
                   <Tooltip content={<GenericTooltip />} />
                   <Bar
                     dataKey="qty"
@@ -1040,7 +1204,11 @@ export default function ProductionInsightsChart({
             machineOptions={rejectionOptions.machineOptions}
             partOptions={rejectionOptions.partOptions}
             onHallChange={(e) =>
-              setRejectionFilters({ hall: e.target.value, machine: "all", part: "all" })
+              setRejectionFilters({
+                hall: e.target.value,
+                machine: "all",
+                part: "all",
+              })
             }
             onMachineChange={(e) =>
               setRejectionFilters((prev) => ({
@@ -1059,7 +1227,12 @@ export default function ProductionInsightsChart({
             <ResponsiveContainer width="100%" height="100%">
               <ComposedChart
                 data={rejectionOverviewData}
-                margin={{ top: 16, right: 18, left: 0, bottom: 8 }}
+                margin={{
+                  top: 40,
+                  right: 18,
+                  left: 0,
+                  bottom: 8,
+                }}
                 barCategoryGap="24%"
               >
                 <CartesianGrid
@@ -1067,27 +1240,45 @@ export default function ProductionInsightsChart({
                   strokeDasharray="3 3"
                   vertical={false}
                 />
+
                 <XAxis
                   dataKey="shortLabel"
                   interval={0}
                   angle={rejectionOverviewData.length > 8 ? -20 : 0}
-                  textAnchor={rejectionOverviewData.length > 8 ? "end" : "middle"}
+                  textAnchor={
+                    rejectionOverviewData.length > 8 ? "end" : "middle"
+                  }
                   height={rejectionOverviewData.length > 8 ? 56 : 34}
-                  tick={{ fontSize: 11, fill: INDUSTRY_COLORS.textMuted }}
+                  tick={{
+                    fontSize: 11,
+                    fill: INDUSTRY_COLORS.textMuted,
+                  }}
                 />
+
                 <YAxis
                   yAxisId="left"
                   width={64}
-                  tick={{ fontSize: 11, fill: INDUSTRY_COLORS.textMuted }}
+                  domain={[0, "dataMax + 20"]}
+                  tick={{
+                    fontSize: 11,
+                    fill: INDUSTRY_COLORS.textMuted,
+                  }}
                 />
+
                 <YAxis
                   yAxisId="right"
                   orientation="right"
+                  domain={[0, "dataMax + 5"]}
                   tickFormatter={(value) => `${value}%`}
-                  tick={{ fontSize: 11, fill: INDUSTRY_COLORS.textMuted }}
+                  tick={{
+                    fontSize: 11,
+                    fill: INDUSTRY_COLORS.textMuted,
+                  }}
                 />
+
                 <Tooltip content={<RejectionTooltip />} />
                 <Legend />
+
                 <Bar
                   yAxisId="left"
                   dataKey="reject"
@@ -1096,7 +1287,22 @@ export default function ProductionInsightsChart({
                   radius={[4, 4, 0, 0]}
                   barSize={FIXED_BAR_SIZE}
                   maxBarSize={FIXED_BAR_SIZE}
-                />
+                >
+                  <LabelList
+                    dataKey="reject"
+                    position="top"
+                    offset={10}
+                    formatter={(value) =>
+                      value > 0 ? formatNumber(value) : ""
+                    }
+                    style={{
+                      fill: INDUSTRY_COLORS.reject,
+                      fontSize: 12,
+                      fontWeight: 700,
+                    }}
+                  />
+                </Bar>
+
                 <Line
                   yAxisId="right"
                   type="monotone"
@@ -1104,8 +1310,25 @@ export default function ProductionInsightsChart({
                   name="Reject Rate %"
                   stroke={INDUSTRY_COLORS.rejectSoft}
                   strokeWidth={2}
-                  dot={{ r: 3 }}
-                />
+                  dot={{
+                    r: 4,
+                    fill: INDUSTRY_COLORS.rejectSoft,
+                  }}
+                >
+                  {/* <LabelList
+                    dataKey="rejectRate"
+                    position="centerBottom"
+                    offset={8}
+                    formatter={(value) =>
+                      value > 0 ? `${Number(value).toFixed(1)}%` : ""
+                    }
+                    style={{
+                      fill: INDUSTRY_COLORS.rejectSoft,
+                      fontSize: 11,
+                      fontWeight: 700,
+                    }}
+                  /> */}
+                </Line>
               </ComposedChart>
             </ResponsiveContainer>
           </div>
@@ -1127,7 +1350,11 @@ export default function ProductionInsightsChart({
               machineOptions={lossOptions.machineOptions}
               partOptions={lossOptions.partOptions}
               onHallChange={(e) =>
-                setLossFilters({ hall: e.target.value, machine: "all", part: "all" })
+                setLossFilters({
+                  hall: e.target.value,
+                  machine: "all",
+                  part: "all",
+                })
               }
               onMachineChange={(e) =>
                 setLossFilters((prev) => ({
@@ -1163,7 +1390,9 @@ export default function ProductionInsightsChart({
                     height={lossReasonData.length > 8 ? 56 : 34}
                     tick={{ fontSize: 11, fill: INDUSTRY_COLORS.textMuted }}
                   />
-                  <YAxis tick={{ fontSize: 11, fill: INDUSTRY_COLORS.textMuted }} />
+                  <YAxis
+                    tick={{ fontSize: 11, fill: INDUSTRY_COLORS.textMuted }}
+                  />
                   <Tooltip content={<GenericTooltip />} />
                   <Bar
                     dataKey="minutes"
@@ -1198,7 +1427,11 @@ export default function ProductionInsightsChart({
             machineOptions={lossOptions.machineOptions}
             partOptions={lossOptions.partOptions}
             onHallChange={(e) =>
-              setLossFilters({ hall: e.target.value, machine: "all", part: "all" })
+              setLossFilters({
+                hall: e.target.value,
+                machine: "all",
+                part: "all",
+              })
             }
             onMachineChange={(e) =>
               setLossFilters((prev) => ({
@@ -1233,7 +1466,10 @@ export default function ProductionInsightsChart({
                   height={lossOverviewData.length > 8 ? 56 : 34}
                   tick={{ fontSize: 11, fill: INDUSTRY_COLORS.textMuted }}
                 />
-                <YAxis width={64} tick={{ fontSize: 11, fill: INDUSTRY_COLORS.textMuted }} />
+                <YAxis
+                  width={64}
+                  tick={{ fontSize: 11, fill: INDUSTRY_COLORS.textMuted }}
+                />
                 <Tooltip content={<LossTooltip />} />
                 <Bar
                   dataKey="lossMinutes"

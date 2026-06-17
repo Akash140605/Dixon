@@ -119,56 +119,60 @@ function HallCard({ hall }) {
           </div>
 
           <div className="p-3">
-            <div className="rounded-[6px] border border-slate-800 bg-slate-950 px-3 py-3">
-              <div className="flex min-w-0 items-start justify-between gap-3">
-                <div className="min-w-0 flex-1">
-                  <p className="text-[9px] font-semibold uppercase tracking-[0.14em] text-slate-400">
-                    Hall Name
-                  </p>
-                  <h2 className="mt-1 break-words text-lg font-bold tracking-tight text-white">
-                    {hall.hall}
-                  </h2>
-                  <p className="mt-1 break-words text-xs leading-snug text-slate-400">
-                    {hasData ? efficiencyConfig.note : "No production data available yet"}
-                  </p>
-                </div>
+<div className="rounded-[8px] border border-[#A5B4FC] bg-[#E8E7FF] px-3 py-3 shadow-sm">
+  <div className="flex min-w-0 items-start justify-between gap-3">
+    <div className="min-w-0 flex-1">
+      <p className="text-[9px] font-semibold uppercase tracking-[0.14em] text-[#4338CA]">
+        Hall Name
+      </p>
 
-                <span
-                  className={`shrink-0 rounded-[4px] border px-2.5 py-1 text-[9px] font-bold uppercase tracking-[0.12em] ${efficiencyConfig.badge}`}
-                >
-                  {hasData ? efficiencyConfig.label : "No Data"}
-                </span>
-              </div>
+      <h2 className="mt-1 break-words text-lg font-bold tracking-tight text-[#231E5B]">
+        {hall.hall}
+      </h2>
 
-              <div className="mt-4 grid grid-cols-2 gap-3">
-                <div className="min-w-0">
-                  <p className="text-[9px] font-semibold uppercase tracking-[0.12em] text-slate-400">
-                    Efficiency
-                  </p>
-                  <p
-                    className={`mt-1 break-words text-[22px] font-bold leading-none tabular-nums ${efficiencyConfig.valueClass}`}
-                  >
-                    {hall.efficiency.toFixed(1)}%
-                  </p>
-                </div>
+      <p className="mt-1 break-words text-xs leading-snug text-[#312E81]">
+        {hasData
+          ? efficiencyConfig.note
+          : "No production data available yet"}
+      </p>
+    </div>
 
-                <div className="min-w-0 text-right">
-                  <p className="text-[9px] font-semibold uppercase tracking-[0.12em] text-slate-400">
-                    Reject Rate
-                  </p>
-                  <p className="mt-1 break-words text-base font-bold tabular-nums text-rose-300">
-                    {rejectRate.toFixed(1)}%
-                  </p>
-                </div>
-              </div>
+    <span
+      className={`shrink-0 rounded-[4px] border px-2.5 py-1 text-[9px] font-bold uppercase tracking-[0.12em] ${efficiencyConfig.badge}`}
+    >
+      {hasData ? efficiencyConfig.label : "No Data"}
+    </span>
+  </div>
 
-              <div className="mt-3 h-2 overflow-hidden bg-slate-800">
-                <div
-                  className={`h-full ${efficiencyConfig.progress}`}
-                  style={{ width: `${progressWidth}%` }}
-                />
-              </div>
-            </div>
+  <div className="mt-4 grid grid-cols-2 gap-3">
+    <div className="min-w-0">
+      <p className="text-[9px] font-semibold uppercase tracking-[0.12em] text-[#4338CA]">
+        Efficiency
+      </p>
+
+      <p className="mt-1 break-words text-[22px] font-bold leading-none tabular-nums text-[#231E5B]">
+        {hall.efficiency.toFixed(1)}%
+      </p>
+    </div>
+
+    <div className="min-w-0 text-right">
+      <p className="text-[9px] font-semibold uppercase tracking-[0.12em] text-[#4338CA]">
+        Reject Rate
+      </p>
+
+      <p className="mt-1 break-words text-base font-bold tabular-nums text-red-600">
+        {rejectRate.toFixed(1)}%
+      </p>
+    </div>
+  </div>
+
+  <div className="mt-3 h-2 overflow-hidden rounded-full bg-indigo-200">
+    <div
+      className={`h-full ${efficiencyConfig.progress}`}
+      style={{ width: `${progressWidth}%` }}
+    />
+  </div>
+</div>
 
             <div
               className={`mt-3 rounded-[6px] border border-slate-300 px-3 py-3 ${efficiencyConfig.panel}`}

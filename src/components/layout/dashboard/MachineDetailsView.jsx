@@ -282,6 +282,7 @@ function DetailTable({ rows, onEditRow, onDeleteRow, deletingRowId }) {
               <th className="whitespace-nowrap px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">Operator</th>
               <th className="whitespace-nowrap px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">Operator ID</th>
               <th className="whitespace-nowrap px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">Part</th>
+              
               <th className="whitespace-nowrap px-4 py-3 text-right text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">Target</th>
               <th className="whitespace-nowrap px-4 py-3 text-right text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">Actual</th>
               <th className="whitespace-nowrap px-4 py-3 text-right text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">Good</th>
@@ -809,7 +810,7 @@ export default function MachineDetailsView() {
     <div className="min-h-screen bg-slate-100 text-slate-900">
       <main className="mx-auto max-w-[1600px] px-4 py-4 md:px-6 md:py-5 2xl:px-8">
         <section className="overflow-hidden rounded-[8px] border border-slate-300 bg-white shadow-sm">
-          <div className="border-b border-slate-300 bg-slate-900 px-4 py-4 text-white md:px-6">
+          <div className="border-b border-slate-300 bg-[#534DA0] px-4 py-4 text-white md:px-6">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2 text-xs text-slate-300">
@@ -830,7 +831,7 @@ export default function MachineDetailsView() {
                   >
                     {efficiencyConfig.status}
                   </span>
-                  <span className="inline-flex rounded-[4px] border border-slate-600 bg-slate-800 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-200">
+                  <span className="inline-flex rounded-[4px] border border-slate-600 bg-[#534DA0] px-3 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-200">
                     {machineProfile.points} data points
                   </span>
                 </div>
@@ -859,7 +860,7 @@ export default function MachineDetailsView() {
 
                 <Link
                   to={`/hall/${hallId}`}
-                  className="inline-flex h-10 shrink-0 items-center justify-center rounded-[4px] border border-slate-600 bg-slate-800 px-4 text-sm font-medium text-white transition hover:bg-slate-700"
+                  className="inline-flex h-10 shrink-0 items-center justify-center rounded-[4px] border border-slate-600 bg-[#534DA0] px-4 text-sm font-medium text-white transition hover:bg-slate-700"
                 >
                   Back to Machines
                 </Link>
@@ -911,7 +912,7 @@ export default function MachineDetailsView() {
           <div className="p-4 md:p-5">
             <div className="grid gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
               <div className="rounded-[6px] border border-slate-300 bg-slate-50 p-4 shadow-sm">
-                <div className="rounded-[6px] border border-slate-800 bg-slate-950 px-4 py-4">
+                <div className="rounded-[6px] border border-slate-800 bg-[#534DA0] px-4 py-4">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
@@ -960,7 +961,7 @@ export default function MachineDetailsView() {
                     </div>
                   </div>
 
-                  <div className="mt-4 h-2 overflow-hidden bg-slate-800">
+                  <div className="mt-4 h-2 overflow-hidden bg-[#534DA0]">
                     <div
                       className={`h-full ${efficiencyConfig.bar}`}
                       style={{ width: `${progressWidth}%` }}

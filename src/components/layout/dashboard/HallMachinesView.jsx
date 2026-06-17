@@ -15,7 +15,9 @@ function getArray(value) {
 }
 
 function normalizeValue(value) {
-  return String(value || "").trim().toLowerCase();
+  return String(value || "")
+    .trim()
+    .toLowerCase();
 }
 
 function getHallAliases(hallId, hallLabel) {
@@ -93,7 +95,9 @@ function SummaryStat({ label, value, tone = "default" }) {
   };
 
   return (
-    <div className={`rounded-[6px] border px-3 py-3 shadow-sm ${toneMap[tone] || toneMap.default}`}>
+    <div
+      className={`rounded-[6px] border px-3 py-3 shadow-sm ${toneMap[tone] || toneMap.default}`}
+    >
       <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">
         {label}
       </p>
@@ -139,37 +143,41 @@ function MachineTile({ item, hallId }) {
           </div>
 
           <div className="p-3">
-            <div className="rounded-[6px] border border-slate-800 bg-slate-950 px-3 py-3">
+            <div className="rounded-[8px] border border-[#C7C4FF] bg-[#E8E7FF] px-3 py-3 shadow-sm">
+              {" "}
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0 flex-1">
-                  <p className="text-[9px] font-semibold uppercase tracking-[0.14em] text-slate-400">
+                  <p className="text-[9px] font-semibold uppercase tracking-[0.14em] text-[#4338CA]">
                     Machine No.
                   </p>
                   <h2
-                    className="mt-1 line-clamp-2 text-lg font-bold leading-6 tracking-tight text-white"
+                    className="mt-1 line-clamp-2 text-lg font-bold leading-6 tracking-tight text-[#231E5B]"
                     title={item.machine}
                   >
                     {item.machine}
                   </h2>
                 </div>
 
-                <span className={`shrink-0 rounded-[4px] border px-2.5 py-1 text-[9px] font-bold uppercase tracking-[0.12em] ${config.badge}`}>
+                <span
+                  className={`shrink-0 rounded-[4px] border px-2.5 py-1 text-[9px] font-bold uppercase tracking-[0.12em] ${config.badge}`}
+                >
                   {config.label}
                 </span>
               </div>
-
               <div className="mt-4 grid grid-cols-2 gap-3">
                 <div>
-                  <p className="text-[9px] font-semibold uppercase tracking-[0.12em] text-slate-400">
+                  <p className="text-[9px] font-semibold uppercase tracking-[0.12em] text-[#4338CA]">
                     Efficiency
                   </p>
-                  <p className={`mt-1 text-[22px] font-bold leading-none tabular-nums ${config.text}`}>
+                  <p
+                    className={`mt-1 text-[22px] font-bold leading-none tabular-nums ${config.text}`}
+                  >
                     {efficiency.toFixed(1)}%
                   </p>
                 </div>
 
                 <div className="text-right">
-                  <p className="text-[9px] font-semibold uppercase tracking-[0.12em] text-slate-400">
+                  <p className="text-[9px] font-semibold uppercase tracking-[0.12em] text-[#4338CA]">
                     Loss Minutes
                   </p>
                   <p className="mt-1 text-base font-bold tabular-nums text-amber-300">
@@ -177,8 +185,7 @@ function MachineTile({ item, hallId }) {
                   </p>
                 </div>
               </div>
-
-              <div className="mt-3 h-2 overflow-hidden bg-slate-800">
+              <div className="mt-3 h-2 overflow-hidden bg-[#231E5B]">
                 <div
                   className={`h-full ${config.bar}`}
                   style={{ width: `${progressWidth}%` }}
@@ -186,7 +193,9 @@ function MachineTile({ item, hallId }) {
               </div>
             </div>
 
-            <div className={`mt-3 rounded-[6px] border border-slate-300 px-3 py-3 ${config.panel}`}>
+            <div
+              className={`mt-3 rounded-[6px] border border-slate-300 px-3 py-3 ${config.panel}`}
+            >
               <div className="grid grid-cols-2 gap-3">
                 <div className="min-w-0">
                   <p className="text-[9px] font-semibold uppercase tracking-[0.12em] text-slate-500">
@@ -355,7 +364,8 @@ export default function HallMachinesView() {
       grouped[key].lossMinutes += toNumber(row.lossMinutes);
 
       if (!grouped[key].part && row.part) grouped[key].part = row.part;
-      if (!grouped[key].operator && row.operator) grouped[key].operator = row.operator;
+      if (!grouped[key].operator && row.operator)
+        grouped[key].operator = row.operator;
     });
 
     return Object.values(grouped)
@@ -393,15 +403,15 @@ export default function HallMachinesView() {
     <div className="min-h-screen bg-slate-100 text-slate-900">
       <main className="mx-auto max-w-[1800px] px-4 py-4 md:px-6 md:py-5 2xl:px-8">
         <section className="overflow-hidden rounded-[8px] border border-slate-300 bg-white shadow-sm">
-          <div className="border-b border-slate-300 bg-slate-900 px-4 py-4 text-white md:px-6">
+         <div className="border-b border-slate-300 bg-[#231E5B] px-4 py-4 text-white md:px-6">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
               <div className="min-w-0">
                 <div className="flex items-center gap-2 text-xs text-slate-300">
-                  <Link to="/" className="transition hover:text-white">
+                  <Link to="/" className="transition hover:text-[#231E5B]">
                     Halls
                   </Link>
                   <span>/</span>
-                  <span className="truncate text-white">{hallLabel}</span>
+                  <span className="truncate text-[#231E5B]">{hallLabel}</span>
                 </div>
 
                 <h1 className="mt-2 text-xl font-semibold tracking-tight md:text-2xl">
@@ -409,13 +419,14 @@ export default function HallMachinesView() {
                 </h1>
 
                 <p className="mt-1 max-w-2xl text-sm text-slate-300">
-                  High-visibility machine cards with sharper corners and cleaner industrial styling.
+                  High-visibility machine cards with sharper corners and cleaner
+                  industrial styling.
                 </p>
               </div>
 
               <Link
                 to="/"
-                className="inline-flex h-10 shrink-0 items-center justify-center rounded-[4px] border border-slate-600 bg-slate-800 px-4 text-sm font-medium text-white transition hover:bg-slate-700"
+                className="inline-flex h-10 shrink-0 items-center justify-center rounded-[4px] border border-slate-600 bg-[#231E5B] px-4 text-sm font-medium text-white transition hover:bg-slate-700"
               >
                 Back
               </Link>
@@ -423,11 +434,26 @@ export default function HallMachinesView() {
           </div>
 
           <div className="grid grid-cols-2 gap-3 p-4 md:grid-cols-3 xl:grid-cols-6 md:p-5">
-            <SummaryStat label="Machines" value={formatNumber(summary.machines)} />
+            <SummaryStat
+              label="Machines"
+              value={formatNumber(summary.machines)}
+            />
             <SummaryStat label="Target" value={formatNumber(summary.target)} />
-            <SummaryStat label="Actual" value={formatNumber(summary.actual)} tone="sky" />
-            <SummaryStat label="Good" value={formatNumber(summary.good)} tone="emerald" />
-            <SummaryStat label="Reject" value={formatNumber(summary.reject)} tone="rose" />
+            <SummaryStat
+              label="Actual"
+              value={formatNumber(summary.actual)}
+              tone="sky"
+            />
+            <SummaryStat
+              label="Good"
+              value={formatNumber(summary.good)}
+              tone="emerald"
+            />
+            <SummaryStat
+              label="Reject"
+              value={formatNumber(summary.reject)}
+              tone="rose"
+            />
             <SummaryStat
               label="Hall Eff."
               value={`${hallEfficiency.toFixed(1)}%`}

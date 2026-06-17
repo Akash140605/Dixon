@@ -7,6 +7,7 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
+  LabelList,
 } from "recharts";
 
 function formatNumber(value) {
@@ -129,60 +130,100 @@ export default function ShiftBarChart({ data = [] }) {
           </div>
 
           <div className="h-[300px] w-full rounded-xl border border-slate-200 bg-white p-2">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart
-                data={chartData}
-                margin={{ top: 8, right: 8, left: -18, bottom: 0 }}
-                barCategoryGap={20}
-              >
-                <CartesianGrid
-                  vertical={false}
-                  strokeDasharray="3 3"
-                  stroke="rgba(148,163,184,0.18)"
-                />
+         <ResponsiveContainer width="100%" height="100%">
+  <BarChart
+    data={chartData}
+    margin={{ top: 40, right: 8, left: 0, bottom: 0 }}
+    barCategoryGap={20}
+  >
+    <CartesianGrid
+      vertical={false}
+      strokeDasharray="3 3"
+      stroke="rgba(148,163,184,0.18)"
+    />
 
-                <XAxis
-                  dataKey="shift"
-                  stroke="#64748b"
-                  tick={{ fill: "#64748b", fontSize: 11 }}
-                  axisLine={false}
-                  tickLine={false}
-                />
+    <XAxis
+      dataKey="shift"
+      stroke="#64748b"
+      tick={{ fill: "#64748b", fontSize: 11 }}
+      axisLine={false}
+      tickLine={false}
+    />
 
-                <YAxis
-                  stroke="#64748b"
-                  tick={{ fill: "#64748b", fontSize: 11 }}
-                  axisLine={false}
-                  tickLine={false}
-                />
+    <YAxis
+      stroke="#64748b"
+      tick={{ fill: "#64748b", fontSize: 11 }}
+      axisLine={false}
+      tickLine={false}
+      domain={[0, "dataMax + 50"]}
+    />
 
-                <Tooltip content={<CustomTooltip />} cursor={{ fill: "rgba(148,163,184,0.08)" }} />
+    <Tooltip
+      content={<CustomTooltip />}
+      cursor={{ fill: "rgba(148,163,184,0.08)" }}
+    />
 
-                <Bar
-                  dataKey="actual"
-                  name="Actual"
-                  fill="#15803d"
-                  radius={[4, 4, 0, 0]}
-                  barSize={18}
-                />
+    <Bar
+      dataKey="actual"
+      name="Actual"
+      fill="#15803d"
+      radius={[4, 4, 0, 0]}
+      barSize={18}
+    >
+      <LabelList
+        dataKey="actual"
+        position="top"
+        offset={8}
+        formatter={(v) => (v > 0 ? formatNumber(v) : "")}
+        style={{
+          fill: "#15803d",
+          fontSize: 11,
+          fontWeight: 700,
+        }}
+      />
+    </Bar>
 
-                <Bar
-                  dataKey="good"
-                  name="Good"
-                  fill="#0369a1"
-                  radius={[4, 4, 0, 0]}
-                  barSize={18}
-                />
+    <Bar
+      dataKey="good"
+      name="Good"
+      fill="#0369a1"
+      radius={[4, 4, 0, 0]}
+      barSize={18}
+    >
+      <LabelList
+        dataKey="good"
+        position="top"
+        offset={8}
+        formatter={(v) => (v > 0 ? formatNumber(v) : "")}
+        style={{
+          fill: "#0369a1",
+          fontSize: 11,
+          fontWeight: 700,
+        }}
+      />
+    </Bar>
 
-                <Bar
-                  dataKey="reject"
-                  name="Reject"
-                  fill="#d97706"
-                  radius={[4, 4, 0, 0]}
-                  barSize={18}
-                />
-              </BarChart>
-            </ResponsiveContainer>
+    <Bar
+      dataKey="reject"
+      name="Reject"
+      fill="#d97706"
+      radius={[4, 4, 0, 0]}
+      barSize={18}
+    >
+      <LabelList
+        dataKey="reject"
+        position="top"
+        offset={8}
+        formatter={(v) => (v > 0 ? formatNumber(v) : "")}
+        style={{
+          fill: "#d97706",
+          fontSize: 11,
+          fontWeight: 700,
+        }}
+      />
+    </Bar>
+  </BarChart>
+</ResponsiveContainer>
           </div>
         </>
       ) : (

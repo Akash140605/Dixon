@@ -79,7 +79,9 @@ function splitLabel(value, chunkSize = 14) {
     } else {
       if (current) lines.push(current);
       if (word.length > chunkSize) {
-        const parts = word.match(new RegExp(`.{1,${chunkSize}}`, "g")) || [word];
+        const parts = word.match(new RegExp(`.{1,${chunkSize}}`, "g")) || [
+          word,
+        ];
         lines.push(...parts.slice(0, -1));
         current = parts[parts.length - 1] || "";
       } else {
@@ -173,25 +175,23 @@ function SummaryCard({ label, value, tone = "default", helper }) {
   const toneClasses = getChartToneClasses(tone);
 
   return (
-    <div className={`rounded-[6px] border px-3 py-3 shadow-sm ${toneClasses.card}`}>
+    <div
+      className={`rounded-[6px] border px-3 py-3 shadow-sm ${toneClasses.card}`}
+    >
       <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">
         {label}
       </p>
       <p className={`mt-1 text-sm font-bold tabular-nums ${toneClasses.text}`}>
         {value}
       </p>
-      {helper ? <p className="mt-1 text-[11px] text-slate-500">{helper}</p> : null}
+      {helper ? (
+        <p className="mt-1 text-[11px] text-slate-500">{helper}</p>
+      ) : null}
     </div>
   );
 }
 
-function SelectField({
-  label,
-  value,
-  onChange,
-  options,
-  allLabel = "All",
-}) {
+function SelectField({ label, value, onChange, options, allLabel = "All" }) {
   if (!options.length) return null;
 
   return (
@@ -225,13 +225,7 @@ function SectionBadge({ text }) {
   );
 }
 
-function ChartSection({
-  title,
-  subtitle,
-  rightText,
-  filters,
-  children,
-}) {
+function ChartSection({ title, subtitle, rightText, filters, children }) {
   return (
     <div className="rounded-[8px] border border-slate-300 bg-white p-3 shadow-sm">
       <div className="mb-4 rounded-[6px] border border-slate-300 bg-slate-50 p-4">
@@ -244,9 +238,7 @@ function ChartSection({
           <SectionBadge text={rightText} />
         </div>
 
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-          {filters}
-        </div>
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-3">{filters}</div>
       </div>
 
       {children}
@@ -264,7 +256,8 @@ function buildTimelineLabel(row) {
 function normalizeGraphRow(row = {}, block = {}) {
   const actual = toNumber(row.actual);
   const reject = toNumber(row.reject);
-  const shiftRaw = row.shiftLabel || row.shift || block.shiftLabel || block.shift || "";
+  const shiftRaw =
+    row.shiftLabel || row.shift || block.shiftLabel || block.shift || "";
 
   return {
     id:
@@ -306,10 +299,14 @@ function normalizeGraphRow(row = {}, block = {}) {
     target: toNumber(row.target),
     lossQty: toNumber(row.lossQty ?? row.lossTime ?? row.loss ?? 0),
     lossMinutes: toNumber(
-      row.lossMinutes ?? row.lossTimeMinutes ?? row.lossMin ?? 0
+      row.lossMinutes ?? row.lossTimeMinutes ?? row.lossMin ?? 0,
     ),
-    rejectBreakdown: Array.isArray(row.rejectBreakdown) ? row.rejectBreakdown : [],
-    lossTimeBreakdown: Array.isArray(row.lossTimeBreakdown) ? row.lossTimeBreakdown : [],
+    rejectBreakdown: Array.isArray(row.rejectBreakdown)
+      ? row.rejectBreakdown
+      : [],
+    lossTimeBreakdown: Array.isArray(row.lossTimeBreakdown)
+      ? row.lossTimeBreakdown
+      : [],
     rejectReason: normalizeText(row.rejectReason),
     remarks: normalizeText(row.remarks || row.comment || row.notes),
     timelineLabel: buildTimelineLabel({
@@ -318,7 +315,9 @@ function normalizeGraphRow(row = {}, block = {}) {
       shift: shiftRaw,
       hour: row.hour || row.label || row.slot || row.duration || row.time,
     }),
-    compactMeta: [formatSafeDate(row.date || block.date), shiftRaw].filter(Boolean).join(" • "),
+    compactMeta: [formatSafeDate(row.date || block.date), shiftRaw]
+      .filter(Boolean)
+      .join(" • "),
   };
 }
 
@@ -356,7 +355,8 @@ function aggregateRows(rows, groupBy) {
     grouped[key].lossMinutes += toNumber(row.lossMinutes);
 
     if (row.date) grouped[key].dates.add(formatSafeDate(row.date));
-    if (row.shiftLabel || row.shift) grouped[key].shifts.add(row.shiftLabel || row.shift);
+    if (row.shiftLabel || row.shift)
+      grouped[key].shifts.add(row.shiftLabel || row.shift);
 
     (row.rejectBreakdown || []).forEach((item) => {
       const reason = item?.reason || "Other";
@@ -454,7 +454,11 @@ function GenericTooltip({ active, payload, label }) {
         ))}
       </div>
 
-      {row?.date || row?.shiftLabel || row?.hour || row?.operator || row?.part ? (
+      {row?.date ||
+      row?.shiftLabel ||
+      row?.hour ||
+      row?.operator ||
+      row?.part ? (
         <div className="mt-3 space-y-1 border-t border-slate-200 pt-2 text-xs text-slate-700">
           {row.date ? (
             <div className="flex items-center justify-between gap-3">
@@ -465,7 +469,9 @@ function GenericTooltip({ active, payload, label }) {
           {row.shiftLabel || row.shift ? (
             <div className="flex items-center justify-between gap-3">
               <span>Shift</span>
-              <span className="font-semibold">{row.shiftLabel || row.shift}</span>
+              <span className="font-semibold">
+                {row.shiftLabel || row.shift}
+              </span>
             </div>
           ) : null}
           {row.hour ? (
@@ -508,7 +514,8 @@ function getAdaptiveBarSize(count, large = 26, small = 18) {
 
 function filterRows(rows, filters) {
   return rows.filter((row) => {
-    const partMatch = filters.part === "all" || String(row.part) === String(filters.part);
+    const partMatch =
+      filters.part === "all" || String(row.part) === String(filters.part);
     const dateMatch =
       filters.date === "all" ||
       String(row.date || "") === String(filters.date || "");
@@ -552,28 +559,43 @@ export default function MachineDetailGraphs({
     }
 
     return rows.sort((a, b) =>
-      String(a.timelineLabel || "").localeCompare(String(b.timelineLabel || ""))
+      String(a.timelineLabel || "").localeCompare(
+        String(b.timelineLabel || ""),
+      ),
     );
   }, [machineHourlyTrend, hourlyTable]);
 
   const partOptions = useMemo(
-    () => [...new Set(normalizedRows.map((row) => row.part).filter(Boolean))].sort(),
-    [normalizedRows]
+    () =>
+      [
+        ...new Set(normalizedRows.map((row) => row.part).filter(Boolean)),
+      ].sort(),
+    [normalizedRows],
   );
 
   const dateOptions = useMemo(
-    () => [...new Set(normalizedRows.map((row) => row.date).filter(Boolean))].sort(),
-    [normalizedRows]
+    () =>
+      [
+        ...new Set(normalizedRows.map((row) => row.date).filter(Boolean)),
+      ].sort(),
+    [normalizedRows],
   );
 
   const shiftOptions = useMemo(
     () =>
-      [...new Set(normalizedRows.map((row) => row.shiftLabel || row.shift).filter(Boolean))].sort(),
-    [normalizedRows]
+      [
+        ...new Set(
+          normalizedRows
+            .map((row) => row.shiftLabel || row.shift)
+            .filter(Boolean),
+        ),
+      ].sort(),
+    [normalizedRows],
   );
 
   const [overallFilters, setOverallFilters] = useState(createFilterState());
-  const [efficiencyFilters, setEfficiencyFilters] = useState(createFilterState());
+  const [efficiencyFilters, setEfficiencyFilters] =
+    useState(createFilterState());
   const [rejectionFilters, setRejectionFilters] = useState(createFilterState());
   const [lossFilters, setLossFilters] = useState(createFilterState());
 
@@ -602,28 +624,28 @@ export default function MachineDetailGraphs({
         target: 0,
         lossQty: 0,
         lossMinutes: 0,
-      }
+      },
     );
   }, [normalizedRows]);
 
   const filteredOverallRows = useMemo(
     () => filterRows(normalizedRows, overallFilters),
-    [normalizedRows, overallFilters]
+    [normalizedRows, overallFilters],
   );
 
   const filteredEfficiencyRows = useMemo(
     () => filterRows(normalizedRows, efficiencyFilters),
-    [normalizedRows, efficiencyFilters]
+    [normalizedRows, efficiencyFilters],
   );
 
   const filteredRejectionRows = useMemo(
     () => filterRows(normalizedRows, rejectionFilters),
-    [normalizedRows, rejectionFilters]
+    [normalizedRows, rejectionFilters],
   );
 
   const filteredLossRows = useMemo(
     () => filterRows(normalizedRows, lossFilters),
-    [normalizedRows, lossFilters]
+    [normalizedRows, lossFilters],
   );
 
   const productionTrendData = useMemo(
@@ -632,31 +654,31 @@ export default function MachineDetailGraphs({
         ...row,
         shortLabel: truncateLabel(row.timelineLabel || row.hour, 22),
       })),
-    [filteredOverallRows]
+    [filteredOverallRows],
   );
 
   const efficiencyData = useMemo(
     () =>
       aggregateRows(filteredEfficiencyRows, "part").sort(
-        (a, b) => b.efficiency - a.efficiency
+        (a, b) => b.efficiency - a.efficiency,
       ),
-    [filteredEfficiencyRows]
+    [filteredEfficiencyRows],
   );
 
   const rejectionOverviewData = useMemo(
     () =>
       aggregateRows(filteredRejectionRows, "part").sort(
-        (a, b) => b.reject - a.reject
+        (a, b) => b.reject - a.reject,
       ),
-    [filteredRejectionRows]
+    [filteredRejectionRows],
   );
 
   const lossOverviewData = useMemo(
     () =>
       aggregateRows(filteredLossRows, "part").sort(
-        (a, b) => b.lossMinutes - a.lossMinutes
+        (a, b) => b.lossMinutes - a.lossMinutes,
       ),
-    [filteredLossRows]
+    [filteredLossRows],
   );
 
   const rejectionReasonData = useMemo(
@@ -664,9 +686,9 @@ export default function MachineDetailGraphs({
       getTopReasonData(
         aggregateRows(filteredRejectionRows, "part"),
         "rejectionReasons",
-        "qty"
+        "qty",
       ),
-    [filteredRejectionRows]
+    [filteredRejectionRows],
   );
 
   const lossReasonData = useMemo(
@@ -674,32 +696,60 @@ export default function MachineDetailGraphs({
       getTopReasonData(
         aggregateRows(filteredLossRows, "part"),
         "lossReasons",
-        "minutes"
+        "minutes",
       ),
-    [filteredLossRows]
+    [filteredLossRows],
   );
 
   const overallEfficiency =
     summary.target > 0 ? (summary.actual / summary.target) * 100 : 0;
 
-  const productionChartHeight = getAdaptiveChartHeight(productionTrendData.length, 330, 400);
-  const efficiencyChartHeight = getAdaptiveChartHeight(efficiencyData.length, 300, 380);
-  const rejectionChartHeight = getAdaptiveChartHeight(rejectionOverviewData.length, 310, 390);
-  const lossChartHeight = getAdaptiveChartHeight(lossOverviewData.length, 310, 390);
-  const rejectionReasonChartHeight = getAdaptiveChartHeight(rejectionReasonData.length, 290, 360);
-  const lossReasonChartHeight = getAdaptiveChartHeight(lossReasonData.length, 290, 360);
+  const productionChartHeight = getAdaptiveChartHeight(
+    productionTrendData.length,
+    330,
+    400,
+  );
+  const efficiencyChartHeight = getAdaptiveChartHeight(
+    efficiencyData.length,
+    300,
+    380,
+  );
+  const rejectionChartHeight = getAdaptiveChartHeight(
+    rejectionOverviewData.length,
+    310,
+    390,
+  );
+  const lossChartHeight = getAdaptiveChartHeight(
+    lossOverviewData.length,
+    310,
+    390,
+  );
+  const rejectionReasonChartHeight = getAdaptiveChartHeight(
+    rejectionReasonData.length,
+    290,
+    360,
+  );
+  const lossReasonChartHeight = getAdaptiveChartHeight(
+    lossReasonData.length,
+    290,
+    360,
+  );
 
-  const productionBarSize = getAdaptiveBarSize(productionTrendData.length, 22, 16);
+  const productionBarSize = getAdaptiveBarSize(
+    productionTrendData.length,
+    22,
+    16,
+  );
   const mainBarSize = getAdaptiveBarSize(
     Math.max(
       efficiencyData.length,
       rejectionOverviewData.length,
       lossOverviewData.length,
       rejectionReasonData.length,
-      lossReasonData.length
+      lossReasonData.length,
     ),
     26,
-    18
+    18,
   );
 
   return (
@@ -710,7 +760,8 @@ export default function MachineDetailGraphs({
             Efficiency, Rejection and Loss Analysis
           </h3>
           <p className="mt-1 text-sm text-slate-500">
-            Selected machine ke hourly, date-wise, shift-wise aur part-level operational insights.
+            Selected machine ke hourly, date-wise, shift-wise aur part-level
+            operational insights.
           </p>
         </div>
 
@@ -719,10 +770,26 @@ export default function MachineDetailGraphs({
 
       <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-6">
         <SummaryCard label="Actual" value={formatNumber(summary.actual)} />
-        <SummaryCard label="Good" value={formatNumber(summary.good)} tone="good" />
-        <SummaryCard label="Reject" value={formatNumber(summary.reject)} tone="reject" />
-        <SummaryCard label="Loss Qty" value={formatNumber(summary.lossQty)} tone="loss" />
-        <SummaryCard label="Loss Min" value={formatNumber(summary.lossMinutes)} tone="loss" />
+        <SummaryCard
+          label="Good"
+          value={formatNumber(summary.good)}
+          tone="good"
+        />
+        <SummaryCard
+          label="Reject"
+          value={formatNumber(summary.reject)}
+          tone="reject"
+        />
+        <SummaryCard
+          label="Loss Qty"
+          value={formatNumber(summary.lossQty)}
+          tone="loss"
+        />
+        <SummaryCard
+          label="Loss Min"
+          value={formatNumber(summary.lossMinutes)}
+          tone="loss"
+        />
         <SummaryCard
           label="Efficiency"
           value={formatPercent(overallEfficiency)}
@@ -742,7 +809,10 @@ export default function MachineDetailGraphs({
                 label="Part"
                 value={overallFilters.part}
                 onChange={(e) =>
-                  setOverallFilters((prev) => ({ ...prev, part: e.target.value }))
+                  setOverallFilters((prev) => ({
+                    ...prev,
+                    part: e.target.value,
+                  }))
                 }
                 options={partOptions}
                 allLabel="All Parts"
@@ -751,7 +821,10 @@ export default function MachineDetailGraphs({
                 label="Date"
                 value={overallFilters.date}
                 onChange={(e) =>
-                  setOverallFilters((prev) => ({ ...prev, date: e.target.value }))
+                  setOverallFilters((prev) => ({
+                    ...prev,
+                    date: e.target.value,
+                  }))
                 }
                 options={dateOptions}
                 allLabel="All Dates"
@@ -760,7 +833,10 @@ export default function MachineDetailGraphs({
                 label="Shift"
                 value={overallFilters.shift}
                 onChange={(e) =>
-                  setOverallFilters((prev) => ({ ...prev, shift: e.target.value }))
+                  setOverallFilters((prev) => ({
+                    ...prev,
+                    shift: e.target.value,
+                  }))
                 }
                 options={shiftOptions}
                 allLabel="All Shifts"
@@ -845,7 +921,10 @@ export default function MachineDetailGraphs({
                   label="Part"
                   value={efficiencyFilters.part}
                   onChange={(e) =>
-                    setEfficiencyFilters((prev) => ({ ...prev, part: e.target.value }))
+                    setEfficiencyFilters((prev) => ({
+                      ...prev,
+                      part: e.target.value,
+                    }))
                   }
                   options={partOptions}
                   allLabel="All Parts"
@@ -854,7 +933,10 @@ export default function MachineDetailGraphs({
                   label="Date"
                   value={efficiencyFilters.date}
                   onChange={(e) =>
-                    setEfficiencyFilters((prev) => ({ ...prev, date: e.target.value }))
+                    setEfficiencyFilters((prev) => ({
+                      ...prev,
+                      date: e.target.value,
+                    }))
                   }
                   options={dateOptions}
                   allLabel="All Dates"
@@ -863,7 +945,10 @@ export default function MachineDetailGraphs({
                   label="Shift"
                   value={efficiencyFilters.shift}
                   onChange={(e) =>
-                    setEfficiencyFilters((prev) => ({ ...prev, shift: e.target.value }))
+                    setEfficiencyFilters((prev) => ({
+                      ...prev,
+                      shift: e.target.value,
+                    }))
                   }
                   options={shiftOptions}
                   allLabel="All Shifts"
@@ -927,7 +1012,10 @@ export default function MachineDetailGraphs({
                   label="Part"
                   value={rejectionFilters.part}
                   onChange={(e) =>
-                    setRejectionFilters((prev) => ({ ...prev, part: e.target.value }))
+                    setRejectionFilters((prev) => ({
+                      ...prev,
+                      part: e.target.value,
+                    }))
                   }
                   options={partOptions}
                   allLabel="All Parts"
@@ -936,7 +1024,10 @@ export default function MachineDetailGraphs({
                   label="Date"
                   value={rejectionFilters.date}
                   onChange={(e) =>
-                    setRejectionFilters((prev) => ({ ...prev, date: e.target.value }))
+                    setRejectionFilters((prev) => ({
+                      ...prev,
+                      date: e.target.value,
+                    }))
                   }
                   options={dateOptions}
                   allLabel="All Dates"
@@ -945,7 +1036,10 @@ export default function MachineDetailGraphs({
                   label="Shift"
                   value={rejectionFilters.shift}
                   onChange={(e) =>
-                    setRejectionFilters((prev) => ({ ...prev, shift: e.target.value }))
+                    setRejectionFilters((prev) => ({
+                      ...prev,
+                      shift: e.target.value,
+                    }))
                   }
                   options={shiftOptions}
                   allLabel="All Shifts"
@@ -1024,7 +1118,10 @@ export default function MachineDetailGraphs({
                   label="Part"
                   value={rejectionFilters.part}
                   onChange={(e) =>
-                    setRejectionFilters((prev) => ({ ...prev, part: e.target.value }))
+                    setRejectionFilters((prev) => ({
+                      ...prev,
+                      part: e.target.value,
+                    }))
                   }
                   options={partOptions}
                   allLabel="All Parts"
@@ -1033,7 +1130,10 @@ export default function MachineDetailGraphs({
                   label="Date"
                   value={rejectionFilters.date}
                   onChange={(e) =>
-                    setRejectionFilters((prev) => ({ ...prev, date: e.target.value }))
+                    setRejectionFilters((prev) => ({
+                      ...prev,
+                      date: e.target.value,
+                    }))
                   }
                   options={dateOptions}
                   allLabel="All Dates"
@@ -1042,7 +1142,10 @@ export default function MachineDetailGraphs({
                   label="Shift"
                   value={rejectionFilters.shift}
                   onChange={(e) =>
-                    setRejectionFilters((prev) => ({ ...prev, shift: e.target.value }))
+                    setRejectionFilters((prev) => ({
+                      ...prev,
+                      shift: e.target.value,
+                    }))
                   }
                   options={shiftOptions}
                   allLabel="All Shifts"
@@ -1051,7 +1154,10 @@ export default function MachineDetailGraphs({
             }
           >
             {rejectionReasonData.length ? (
-              <div style={{ height: rejectionReasonChartHeight }} className="w-full">
+              <div
+                style={{ height: rejectionReasonChartHeight }}
+                className="w-full"
+              >
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart
                     data={rejectionReasonData}
@@ -1106,7 +1212,10 @@ export default function MachineDetailGraphs({
                   label="Part"
                   value={lossFilters.part}
                   onChange={(e) =>
-                    setLossFilters((prev) => ({ ...prev, part: e.target.value }))
+                    setLossFilters((prev) => ({
+                      ...prev,
+                      part: e.target.value,
+                    }))
                   }
                   options={partOptions}
                   allLabel="All Parts"
@@ -1115,7 +1224,10 @@ export default function MachineDetailGraphs({
                   label="Date"
                   value={lossFilters.date}
                   onChange={(e) =>
-                    setLossFilters((prev) => ({ ...prev, date: e.target.value }))
+                    setLossFilters((prev) => ({
+                      ...prev,
+                      date: e.target.value,
+                    }))
                   }
                   options={dateOptions}
                   allLabel="All Dates"
@@ -1124,7 +1236,10 @@ export default function MachineDetailGraphs({
                   label="Shift"
                   value={lossFilters.shift}
                   onChange={(e) =>
-                    setLossFilters((prev) => ({ ...prev, shift: e.target.value }))
+                    setLossFilters((prev) => ({
+                      ...prev,
+                      shift: e.target.value,
+                    }))
                   }
                   options={shiftOptions}
                   allLabel="All Shifts"
@@ -1137,25 +1252,38 @@ export default function MachineDetailGraphs({
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart
                     data={lossOverviewData}
-                    margin={{ top: 20, right: 18, left: 0, bottom: 58 }}
+                    margin={{
+                      top: 45,
+                      right: 18,
+                      left: 0,
+                      bottom: 58,
+                    }}
                   >
                     <CartesianGrid
                       stroke={INDUSTRY_COLORS.grid}
                       strokeDasharray="3 3"
                       vertical={false}
                     />
+
                     <XAxis
                       dataKey="shortLabel"
                       interval={0}
                       height={60}
                       tick={<WrappedAxisTick />}
                     />
+
                     <YAxis
-                      tick={{ fontSize: 11, fill: INDUSTRY_COLORS.textMuted }}
+                      tick={{
+                        fontSize: 11,
+                        fill: INDUSTRY_COLORS.textMuted,
+                      }}
                       tickSize={0}
-                      width={38}
+                      width={45}
+                      domain={[0, "dataMax + 50"]}
                     />
+
                     <Tooltip content={<GenericTooltip />} />
+
                     <Bar
                       dataKey="lossMinutes"
                       name="Loss Min"
@@ -1166,8 +1294,15 @@ export default function MachineDetailGraphs({
                       <LabelList
                         dataKey="lossMinutes"
                         position="top"
-                        offset={8}
-                        formatter={formatNumber}
+                        offset={10}
+                        formatter={(value) =>
+                          value > 0 ? formatNumber(value) : ""
+                        }
+                        style={{
+                          fill: INDUSTRY_COLORS.text,
+                          fontSize: 12,
+                          fontWeight: 700,
+                        }}
                       />
                     </Bar>
                   </BarChart>

@@ -198,7 +198,7 @@ export default function FilterBar() {
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <div className="inline-flex h-6 shrink-0 items-center rounded border border-slate-900 bg-slate-900 px-2 text-[9px] font-bold uppercase tracking-[0.16em] text-white">
+              <div className="inline-flex h-6 shrink-0 items-center rounded border border-slate-900 bg-[#231E5B] px-2 text-[9px] font-bold uppercase tracking-[0.16em] text-white">
                 DIXON
               </div>
 
@@ -219,7 +219,7 @@ export default function FilterBar() {
 
             <Link
               to="/entry"
-              className="hidden h-10 items-center justify-center gap-2 rounded-md border border-slate-900 bg-slate-900 px-3 text-sm font-semibold text-white transition hover:bg-slate-800 sm:inline-flex"
+              className="hidden h-10 items-center justify-center gap-2 rounded-md border border-slate-900 bg-[#231E5B] px-3 text-sm font-semibold text-white transition hover:bg-slate-800 sm:inline-flex"
             >
               <FaPlus className="text-[11px]" />
               Add Entry
