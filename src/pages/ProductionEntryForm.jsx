@@ -1391,7 +1391,7 @@ const handlePartChange = (e) => {
           />
         </div>
 
-        <nav className="tab-bar" aria-label="Form sections">
+        {/* <nav className="tab-bar" aria-label="Form sections">
           {sectionTabs.map((tab) => (
             <button
               key={tab.key}
@@ -1405,7 +1405,7 @@ const handlePartChange = (e) => {
               {tab.label}
             </button>
           ))}
-        </nav>
+        </nav> */}
 
         <form onSubmit={handleSubmit} className="form-layout">
           <section ref={sectionRefs.production} className="form-section">
@@ -1421,7 +1421,7 @@ const handlePartChange = (e) => {
                   name="date"
                   value={form.date}
                   className={getFieldClassName(false, true)}
-                  readOnly
+                
                   required
                 />
               </Field>
