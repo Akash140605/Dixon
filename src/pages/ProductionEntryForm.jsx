@@ -890,10 +890,10 @@ const handlePartChange = (e) => {
     setForm((prev) =>
       syncDerivedValues({
         ...prev,
+        date: prev.isEditMode ? prev.date : getTodayDate(),
         part: "",
         cycleTime: "",
         partMode: "manual",
-        date: prev.isEditMode ? prev.date : getTodayDate(),
       })
     );
     return;
@@ -906,68 +906,116 @@ const handlePartChange = (e) => {
   setForm((prev) =>
     syncDerivedValues({
       ...prev,
+      date: prev.isEditMode ? prev.date : getTodayDate(),
       part: value,
       cycleTime: matchedPart ? String(matchedPart.cycleTime ?? "") : "",
       partMode: "select",
-      date: prev.isEditMode ? prev.date : getTodayDate(),
     })
   );
 };
 const handleChange = (e) => {
   const { name, value } = e.target;
 
-  setForm((prev) => {
-    const updated = {
-      ...prev,
-      [name]: value,
-      date: prev.isEditMode ? prev.date : getTodayDate(),
-    };
+  if (name === "hall") {
+    setForm((prev) =>
+      syncDerivedValues({
+        ...prev,
+        date: prev.isEditMode ? prev.date : getTodayDate(),
+        hall: value,
+        machine: "",
+        machineCode: "",
+        machineName: "",
+        machineDisplayName: "",
+      })
+    );
+    return;
+  }
 
-    if (name === "hall") {
-      updated.hall = value;
-      updated.machine = "";
-      updated.machineCode = "";
-      updated.machineName = "";
-      updated.machineDisplayName = "";
-      return updated;
-    }
-
-    if (name === "machine") {
+  if (name === "machine") {
+    setForm((prev) => {
       const hallMachines = prev.hall ? machineMap[prev.hall] || [] : [];
-      const matchedMachine = hallMachines.find((item) => item.code === value);
+      const selectedMachine =
+        hallMachines.find((item) => item.code === value) || null;
 
-      updated.machine = value;
-      updated.machineCode = matchedMachine?.code || "";
-      updated.machineName = matchedMachine?.name || "";
-      updated.machineDisplayName = matchedMachine?.displayName || "";
-      return updated;
-    }
+      return syncDerivedValues({
+        ...prev,
+        date: prev.isEditMode ? prev.date : getTodayDate(),
+        machine: selectedMachine?.code || value || "",
+        machineCode: selectedMachine?.code || value || "",
+        machineName: selectedMachine?.name || "",
+        machineDisplayName: selectedMachine?.displayName || "",
+      });
+    });
+    return;
+  }
 
-    if (name === "duration") {
-      updated.duration = value;
-      updated.shift = getShiftByDuration(value);
-      return updated;
-    }
+  if (name === "duration") {
+    setForm((prev) =>
+      syncDerivedValues({
+        ...prev,
+        date: prev.isEditMode ? prev.date : getTodayDate(),
+        duration: value,
+        shift: getShiftByDuration(value),
+      })
+    );
+    return;
+  }
 
-    if (name === "operatorId") {
-      const normalizedOperatorId = String(value).trim().toLowerCase();
-      const matchedOperator = operatorMaster.find(
-        (item) => String(item.operatorId).trim().toLowerCase() === normalizedOperatorId
-      );
+  if (name === "part") {
+    setForm((prev) =>
+      syncDerivedValues({
+        ...prev,
+        date: prev.isEditMode ? prev.date : getTodayDate(),
+        part: value,
+      })
+    );
+    return;
+  }
 
-      updated.operatorId = value;
-      updated.operator = matchedOperator ? matchedOperator.name : "";
-      updated.isNewOperator = !matchedOperator && Boolean(String(value).trim());
-      return updated;
-    }
+  if (name === "cycleTime") {
+    setForm((prev) =>
+      syncDerivedValues({
+        ...prev,
+        date: prev.isEditMode ? prev.date : getTodayDate(),
+        cycleTime: value,
+      })
+    );
+    return;
+  }
 
-    if (name === "operator") {
-      updated.operator = value;
-      return updated;
-    }
+  if (name === "operatorId") {
+    const cleanValue = value.toUpperCase().trim();
+    const matchedOperator = operatorMaster.find(
+      (item) =>
+        String(item.operatorId || item.id || "").toUpperCase() === cleanValue
+    );
 
-    return syncDerivedValues(updated);
-  });
+    setForm((prev) => ({
+      ...prev,
+      date: prev.isEditMode ? prev.date : getTodayDate(),
+      operatorId: cleanValue,
+      operator: matchedOperator ? matchedOperator.name : "",
+      isNewOperator: cleanValue ? !matchedOperator : false,
+    }));
+    return;
+  }
+
+  if (name === "actual") {
+    setForm((prev) =>
+      syncDerivedValues({
+        ...prev,
+        date: prev.isEditMode ? prev.date : getTodayDate(),
+        actual: value,
+      })
+    );
+    return;
+  }
+
+  setForm((prev) => ({
+    ...prev,
+    date: prev.isEditMode ? prev.date : getTodayDate(),
+    [name]: value,
+  }));
 };
   const handleRejectRowChange = (rowId, value) => {
     setForm((prev) =>
@@ -1087,25 +1135,23 @@ const handleChange = (e) => {
     setSubmitError("");
     setSubmitSuccess("");
 const payload = {
-  date: form.date?.trim(),
-  hall: form.hall?.trim(),
-  machineCode: form.machineCode?.trim(),
-  machineName: form.machineName?.trim(),
-  machineDisplayName: form.machineDisplayName?.trim(),
-  shift: form.shift?.trim(),
-  duration: form.duration?.trim(),
-  operatorId: form.operatorId?.trim(),
-  operator: form.operator?.trim(),
-  part: form.part?.trim(),
+  date: (form.date || "").trim(),
+  hall: (form.hall || "").trim(),
+  machineCode: (form.machineCode || form.machine || "").trim(),
+  machineName: (form.machineName || "").trim(),
+  machineDisplayName: (form.machineDisplayName || "").trim(),
+  shift: (form.shift || "").trim(),
+  duration: (form.duration || "").trim(),
+  operatorId: (form.operatorId || "").trim(),
+  operator: (form.operator || "").trim(),
+  part: (form.part || "").trim(),
   target: Number(form.target || 0),
   actual: Number(form.actual || 0),
   good: Number(form.good || 0),
   reject: Number(form.reject || 0),
-
   lossMinutes: Number(form.lossTimeMinutes || 0),
-
-  rejectReason: form.rejectReason?.trim() || "",
-  remarks: form.remarks?.trim() || "",
+  rejectReason: (form.rejectReason || "").trim(),
+  remarks: (form.remarks || "").trim(),
 };
     if (
       !payload.date ||
