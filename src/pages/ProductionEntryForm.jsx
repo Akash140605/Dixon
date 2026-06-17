@@ -886,13 +886,16 @@ const lossTimeMinutes = calculateLossTimeMinutes(
 const handlePartChange = (e) => {
   const value = e.target.value;
 
-  if (value === "Other") {
-    setForm((prev) => ({
-      ...prev,
-      part: "",
-      cycleTime: "",
-      partMode: "manual",
-    }));
+  if (value === "__manual__") {
+    setForm((prev) =>
+      syncDerivedValues({
+        ...prev,
+        part: "",
+        cycleTime: "",
+        partMode: "manual",
+        date: prev.isEditMode ? prev.date : getTodayDate(),
+      })
+    );
     return;
   }
 
@@ -900,12 +903,15 @@ const handlePartChange = (e) => {
     (item) => item.partName === value
   );
 
-  setForm((prev) => ({
-    ...prev,
-    part: value,
-    cycleTime: matchedPart ? String(matchedPart.cycleTime ?? "") : "",
-    partMode: "select",
-  }));
+  setForm((prev) =>
+    syncDerivedValues({
+      ...prev,
+      part: value,
+      cycleTime: matchedPart ? String(matchedPart.cycleTime ?? "") : "",
+      partMode: "select",
+      date: prev.isEditMode ? prev.date : getTodayDate(),
+    })
+  );
 };
 const handleChange = (e) => {
   const { name, value } = e.target;
@@ -914,30 +920,53 @@ const handleChange = (e) => {
     const updated = {
       ...prev,
       [name]: value,
+      date: prev.isEditMode ? prev.date : getTodayDate(),
     };
 
-    if (name === "duration") {
-      updated.shift = getShiftByDuration(value);
-    }
-
     if (name === "hall") {
+      updated.hall = value;
       updated.machine = "";
       updated.machineCode = "";
       updated.machineName = "";
       updated.machineDisplayName = "";
+      return updated;
     }
 
     if (name === "machine") {
-      const hallMachines = value && prev.hall ? machineMap[prev.hall] || [] : [];
+      const hallMachines = prev.hall ? machineMap[prev.hall] || [] : [];
       const matchedMachine = hallMachines.find((item) => item.code === value);
 
       updated.machine = value;
       updated.machineCode = matchedMachine?.code || "";
       updated.machineName = matchedMachine?.name || "";
       updated.machineDisplayName = matchedMachine?.displayName || "";
+      return updated;
     }
 
-    return updated;
+    if (name === "duration") {
+      updated.duration = value;
+      updated.shift = getShiftByDuration(value);
+      return updated;
+    }
+
+    if (name === "operatorId") {
+      const normalizedOperatorId = String(value).trim().toLowerCase();
+      const matchedOperator = operatorMaster.find(
+        (item) => String(item.operatorId).trim().toLowerCase() === normalizedOperatorId
+      );
+
+      updated.operatorId = value;
+      updated.operator = matchedOperator ? matchedOperator.name : "";
+      updated.isNewOperator = !matchedOperator && Boolean(String(value).trim());
+      return updated;
+    }
+
+    if (name === "operator") {
+      updated.operator = value;
+      return updated;
+    }
+
+    return syncDerivedValues(updated);
   });
 };
   const handleRejectRowChange = (rowId, value) => {
@@ -1340,16 +1369,20 @@ setForm((prev) =>
         placeholder="Enter part name"
         required
       />
+
       <button
         type="button"
         className="outline-btn"
         onClick={() =>
-          setForm((prev) => ({
-            ...prev,
-            part: "",
-            cycleTime: "",
-            partMode: "select",
-          }))
+          setForm((prev) =>
+            syncDerivedValues({
+              ...prev,
+              part: "",
+              cycleTime: "",
+              partMode: "select",
+              date: prev.isEditMode ? prev.date : getTodayDate(),
+            })
+          )
         }
       >
         Back to Parts
@@ -1364,15 +1397,18 @@ setForm((prev) =>
       required
     >
       <option value="">Select Part</option>
+
       {partCycleTimeData.map((item) => (
         <option key={item.partName} value={item.partName}>
           {item.partName}
         </option>
       ))}
+
       <option value="__manual__">Other</option>
     </select>
   )}
 </Field>
+
 <Field label="Cycle Time (sec)">
   <input
     type="number"
@@ -1382,6 +1418,7 @@ setForm((prev) =>
     className={getFieldClassName(false, form.partMode !== "manual")}
     inputMode="numeric"
     readOnly={form.partMode !== "manual"}
+    required
   />
 </Field>
             </div>
