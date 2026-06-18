@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import "./ProductionEntryForm.css";
 import { halls, machineMap, durationSlots } from "../data/formData";
 import { operatorMaster as importedOperatorMaster } from "../data/operatorDetails";
-import { partCycleTimeData, partCycleTimeMap } from "../data/partCycleTimeData";
+
 import { useProduction } from "../context/ProductionContext";
 
 const STORAGE_KEYS = {
@@ -101,7 +101,16 @@ function getResponsibilitySuggestions(value) {
 
 function getTodayDate() {
   const now = new Date();
-  const local = new Date(now.getTime() - now.getTimezoneOffset() * 60000);
+
+  // 08:00 AM se pehle previous day count hoga
+  if (now.getHours() < 8) {
+    now.setDate(now.getDate() - 1);
+  }
+
+  const local = new Date(
+    now.getTime() - now.getTimezoneOffset() * 60000
+  );
+
   return local.toISOString().split("T")[0];
 }
 
@@ -128,19 +137,26 @@ function getShiftByDuration(duration) {
   if (parts.length < 2) return "";
 
   const startMinutes = convertTo24Hour(parts[0].trim());
+
   if (startMinutes === null) return "";
 
-  if (startMinutes >= 6 * 60 && startMinutes < 14 * 60) return "Shift A";
-  if (startMinutes >= 14 * 60 && startMinutes < 22 * 60) return "Shift B";
-  return "Shift C";
+  // Shift A = 08 AM - 08 PM
+  if (startMinutes >= 8 * 60 && startMinutes < 20 * 60) {
+    return "Shift A";
+  }
+
+  // Shift B = 08 PM - 08 AM
+  return "Shift B";
 }
 
 function normalizeShiftValue(value) {
   const raw = String(value || "").trim().toLowerCase();
+
   if (!raw) return "";
+
   if (raw === "a" || raw === "shift a") return "Shift A";
   if (raw === "b" || raw === "shift b") return "Shift B";
-  if (raw === "c" || raw === "shift c") return "Shift C";
+
   return String(value || "").trim();
 }
 
@@ -246,6 +262,11 @@ function getInitialFormState() {
     machine: "",
     machineCode: "",
     machineName: "",
+    partNumber: "",
+partCategory: "",
+
+actualCycleTime: "",
+    standardCycleTime: "",
     machineDisplayName: "",
     duration: "",
     shift: "",
@@ -328,11 +349,10 @@ function derivePartMode(partValue, cycleTimeValue, incomingPartMode) {
   const normalizedPart = String(partValue || "").trim();
   const normalizedCycleTime = String(cycleTimeValue ?? "").trim();
 
-  if (!normalizedPart) return "select";
-  if (normalizedPart === "Other") return "manual";
-  if (partCycleTimeMap[normalizedPart]) return "select";
-  if (normalizedCycleTime === "0") return "manual";
-  return "manual";
+if (!normalizedPart) return "select";
+if (normalizedPart === "Other") return "manual";
+if (normalizedCycleTime && normalizedCycleTime !== "0") return "select";
+return "manual";
 }
 
 function mergeDraftWithDefaults(draft, options = {}) {
@@ -350,7 +370,7 @@ function mergeDraftWithDefaults(draft, options = {}) {
       ? String(draft.cycleTime)
       : "";
 
-  const knownPart = rawPart && Object.prototype.hasOwnProperty.call(partCycleTimeMap, rawPart);
+  const knownPart = !!rawPart;
 
   const derivedPartMode =
     draft?.partMode === "manual" || draft?.partMode === "select"
@@ -379,13 +399,11 @@ function mergeDraftWithDefaults(draft, options = {}) {
     part: rawPart === "Other" ? "" : rawPart,
     partMode: derivedPartMode,
     cycleTime:
-      derivedPartMode === "manual"
-        ? rawCycleTime === "0"
-          ? ""
-          : rawCycleTime
-        : knownPart
-          ? String(partCycleTimeMap[rawPart])
-          : "",
+  derivedPartMode === "manual"
+    ? rawCycleTime === "0"
+      ? ""
+      : rawCycleTime
+    : rawCycleTime,
     isEditMode: Boolean(draft?.isEditMode),
     rejectBreakdown: normalizeRejectBreakdown(draft?.rejectBreakdown),
     lossTimeBreakdown: normalizeLossBreakdown(draft?.lossTimeBreakdown),
@@ -394,12 +412,16 @@ function mergeDraftWithDefaults(draft, options = {}) {
 
 function getFormValidationErrors(form) {
   const errors = {};
+
   const actual = Number(form.actual || 0);
   const reject = Number(form.reject || 0);
   const target = Number(form.target || 0);
   const lossTime = Math.max(target - actual, 0);
 
-  const rejectBreakdownTotal = getRejectBreakdownTotal(form.rejectBreakdown);
+  const rejectBreakdownTotal = getRejectBreakdownTotal(
+    form.rejectBreakdown
+  );
+
   const lossTimeBreakdownTotal = getLossTimeBreakdownTotal(
     form.lossTimeBreakdown
   );
@@ -412,7 +434,11 @@ function getFormValidationErrors(form) {
     errors.actual = "Actual quantity must be zero or greater.";
   }
 
-  if (form.partMode === "manual" && form.cycleTime && !isPositiveNumber(form.cycleTime)) {
+  if (
+    form.partMode === "manual" &&
+    form.cycleTime &&
+    !isPositiveNumber(form.cycleTime)
+  ) {
     errors.cycleTime = "Cycle time must be greater than zero.";
   }
 
@@ -423,6 +449,7 @@ function getFormValidationErrors(form) {
 
   form.rejectBreakdown.forEach((item) => {
     const qty = Number(item.qty || 0);
+
     if (qty < 0) {
       errors[`rejectRow-${item.id}`] =
         "Rejected quantity must be zero or greater.";
@@ -430,15 +457,40 @@ function getFormValidationErrors(form) {
   });
 
   if (rejectBreakdownTotal !== reject) {
-    errors.rejectBreakdown = `Rejection total ${rejectBreakdownTotal} must match derived reject quantity ${reject}.`;
+    errors.rejectBreakdown =
+      `Rejection total ${rejectBreakdownTotal} must match derived reject quantity ${reject}.`;
   }
 
-  if (lossTime > 0 && lossTimeBreakdownTotal !== lossTime) {
-    errors.lossTimeBreakdown = `Loss breakdown total is ${lossTimeBreakdownTotal}. It must match production loss quantity ${lossTime}.`;
+  // LOSS VALIDATION
+  if (lossTime > 0) {
+
+    const validLossRows = form.lossTimeBreakdown.filter((item) => {
+      const matchedPerson = getResponsibilityMatch(item.person);
+
+      return (
+        item.reason &&
+        Number(item.qty || 0) > 0 &&
+        item.person &&
+        matchedPerson
+      );
+    });
+
+    // No loss row entered
+    if (validLossRows.length === 0) {
+      errors.lossTimeBreakdown =
+        "Loss quantity exists. Please enter loss details.";
+    }
+
+    // Total mismatch
+    if (lossTimeBreakdownTotal !== lossTime) {
+      errors.lossTimeBreakdown =
+        `Loss breakdown total is ${lossTimeBreakdownTotal}. It must match production loss quantity ${lossTime}.`;
+    }
   }
 
   form.lossTimeBreakdown.forEach((item) => {
     const matchedPerson = getResponsibilityMatch(item.person);
+
     const hasPartialData =
       item.reason ||
       Number(item.qty || 0) > 0 ||
@@ -447,10 +499,12 @@ function getFormValidationErrors(form) {
 
     if (
       hasPartialData &&
-      (!item.reason ||
+      (
+        !item.reason ||
         Number(item.qty || 0) <= 0 ||
         !item.person ||
-        !matchedPerson)
+        !matchedPerson
+      )
     ) {
       errors[`lossRow-${item.id}`] =
         "Enter a valid reason, quantity, and responsible person.";
@@ -473,19 +527,19 @@ function sanitizeRejectBreakdown(rows, rejectQty) {
 
 function sanitizeLossTimeBreakdown(rows, cycleTime) {
   return rows
-    .map((item) => {
-      const matchedPerson = getResponsibilityMatch(item.person);
-      const qty = Number(item.qty || 0);
-      const minutes =
-        qty > 0
-          ? Number(calculateMinutesFromQty(qty, cycleTime))
-          : Number(item.minutes || 0);
+  .map((item) => {
+    const matchedPerson = getResponsibilityMatch(item.person);
+    const qty = Number(item.qty || 0);
+    const minutes =
+      qty > 0
+        ? Number(calculateMinutesFromQty(qty, cycleTime))
+        : Number(item.minutes || 0);
 
-      return {
-        id: item.id || createId(),
-        reason: String(item.reason || "").trim(),
-        qty,
-        minutes,
+    return {
+      id: item.id || createId(),
+      reason: String(item.reason || "").trim(),
+      qty,
+      minutes,
         person: matchedPerson
           ? matchedPerson.name
           : String(item.person || "").trim(),
@@ -607,6 +661,40 @@ export default function ProductionEntryForm() {
     remarks: useRef(null),
   };
 
+  const [partsData, setPartsData] = useState([]);
+const [partsMap, setPartsMap] = useState({});
+useEffect(() => {
+  const loadParts = async () => {
+    try {
+      const res = await fetch(
+        "https://kushalyouth.com/api/get_parts.php"
+      );
+
+      const result = await res.json();
+
+      if (result.success) {
+        setPartsData(result.data);
+
+        const map = {};
+
+        result.data.forEach((item) => {
+        map[item.part_name] = {
+  cycleTime: item.cycle_time,
+  partNumber: item.part_number,
+  category: item.prod_cat,
+  machine: item.machine,
+};
+        });
+
+        setPartsMap(map);
+      }
+    } catch (err) {
+      console.error("Part API Error", err);
+    }
+  };
+
+  loadParts();
+}, []);
   const [activeTab, setActiveTab] = useState("production");
   const [toast, setToast] = useState({
     show: false,
@@ -682,9 +770,9 @@ export default function ProductionEntryForm() {
           ? String(rawCycleTime || "").trim() === "0"
             ? ""
             : String(rawCycleTime || "")
-          : rawPart && partCycleTimeMap[rawPart]
-            ? String(partCycleTimeMap[rawPart])
-            : "",
+         : rawPart && partsMap[rawPart]
+  ? String(partsMap[rawPart]?.cycleTime || "")
+  : "",
       operatorId: state.operatorId || "",
       operator: state.operator || "",
       actual:
@@ -739,7 +827,7 @@ const syncDerivedValues = (draft) => {
     : String(getRejectBreakdownTotal(normalizedRejectBreakdown));
 
   const knownPart =
-    draft.part && Object.prototype.hasOwnProperty.call(partCycleTimeMap, draft.part);
+    draft.part && Object.prototype.hasOwnProperty.call(partsMap, draft.part);
 
   const safePartMode =
     draft.partMode === "manual" || draft.partMode === "select"
@@ -748,48 +836,59 @@ const syncDerivedValues = (draft) => {
         ? "select"
         : "manual";
 
-  const cycleTime =
-    safePartMode === "manual"
-      ? String(draft.cycleTime ?? "").trim() === "0"
-        ? ""
-        : String(draft.cycleTime ?? "")
-      : knownPart
-        ? String(partCycleTimeMap[draft.part])
-        : "";
+const actualCycleTime =
+  String(draft.actualCycleTime ?? "");
 
-  const target = cycleTime ? calculateTargetFromCycleTime(cycleTime) : "";
+const standardCycleTime =
+  knownPart
+    ? String(partsMap[draft.part]?.cycleTime || "")
+    : String(draft.standardCycleTime ?? "");
+
+ const target =
+  draft.standardCycleTime
+    ? calculateTargetFromCycleTime(draft.standardCycleTime)
+    : "";
   const good = calculateGood(draft.actual, reject);
   const lossTime = calculateLossQuantity(target, draft.actual);
-  const lossTimeMinutes = calculateLossTimeMinutes(lossTime, cycleTime);
-
+const lossTimeMinutes =
+  calculateLossTimeMinutes(
+    lossTime,
+    draft.standardCycleTime
+  );
   const safeLossRows = Array.isArray(draft.lossTimeBreakdown)
     ? draft.lossTimeBreakdown
     : [createLossTimeRow()];
 
-  const normalizedLossRows =
-    Number(lossTime) > 0
-      ? normalizeLossBreakdown(
-          safeLossRows.map((item) => ({
-            ...item,
-            minutes: calculateMinutesFromQty(item.qty, cycleTime),
-          }))
-        )
-      : [createLossTimeRow()];
-
+ const normalizedLossRows =
+  Number(lossTime) > 0
+    ? normalizeLossBreakdown(
+        safeLossRows.map((item) => ({
+          ...item,
+          minutes: calculateMinutesFromQty(
+            item.qty,
+            Number(draft.standardCycleTime || 0)
+          ),
+        }))
+      )
+    : [createLossTimeRow()];
   return {
-    ...draft,
-    date: draft.isEditMode ? draft.date || getTodayDate() : getTodayDate(),
-    partMode: safePartMode,
-    cycleTime,
-    target,
-    reject,
-    good,
-    lossTime,
-    lossTimeMinutes,
-    rejectBreakdown: normalizedRejectBreakdown,
-    lossTimeBreakdown: normalizedLossRows,
-  };
-};
+  ...draft,
+  date: draft.isEditMode ? draft.date || getTodayDate() : getTodayDate(),
+
+  partMode: safePartMode,
+
+  standardCycleTime,
+  actualCycleTime,
+
+  target,
+  reject,
+  good,
+  lossTime,
+  lossTimeMinutes,
+
+  rejectBreakdown: normalizedRejectBreakdown,
+  lossTimeBreakdown: normalizedLossRows,
+};}
 
   useEffect(() => {
     if (!routePrefill) {
@@ -888,7 +987,25 @@ const syncDerivedValues = (draft) => {
   const machineOptions = useMemo(() => {
     return form.hall ? machineMap[form.hall] || [] : [];
   }, [form.hall]);
+const selectedMachineTonnage = useMemo(() => {
+  if (!form.machineName) return "";
 
+  const match = form.machineName.match(/(\d+)\s*T/i);
+
+  return match ? `${match[1]}T` : "";
+}, [form.machineName]);
+
+const filteredPartsData = useMemo(() => {
+  if (!selectedMachineTonnage) return [];
+
+  return partsData.filter(
+    (part) =>
+      String(part.machine || "")
+        .replace(/\s+/g, "")
+        .toUpperCase() ===
+      selectedMachineTonnage.replace(/\s+/g, "").toUpperCase()
+  );
+}, [partsData, selectedMachineTonnage]);
   const existingEntries = useMemo(() => {
     return getStoredJson(STORAGE_KEYS.ENTRIES, []);
   }, [form.entryId]);
@@ -952,19 +1069,21 @@ const handlePartChange = (e) => {
     return;
   }
 
-  const matchedPart = partCycleTimeData.find(
-    (item) => item.partName === value
-  );
+const selectedPart = partsMap[value];
 
-  setForm((prev) =>
-    syncDerivedValues({
-      ...prev,
-      date: prev.isEditMode ? prev.date : getTodayDate(),
-      partMode: "select",
-      part: value,
-      cycleTime: matchedPart ? String(matchedPart.cycleTime ?? "") : "",
-    })
-  );
+setForm((prev) =>
+  syncDerivedValues({
+    ...prev,
+    date: prev.isEditMode ? prev.date : getTodayDate(),
+    partMode: "select",
+    part: value,
+  partNumber: selectedPart?.partNumber || "",
+partCategory: selectedPart?.category || "",
+
+standardCycleTime: selectedPart?.cycleTime || "",
+actualCycleTime: selectedPart?.cycleTime || "",
+  })
+);
 };
 
   const handleChange = (e) => {
@@ -985,24 +1104,32 @@ const handlePartChange = (e) => {
       return;
     }
 
-    if (name === "machine") {
-      setForm((prev) => {
-        const hallMachines = prev.hall ? machineMap[prev.hall] || [] : [];
-        const selectedMachine =
-          hallMachines.find((item) => item.code === value) || null;
+  if (name === "machine") {
+  setForm((prev) => {
+    const hallMachines = prev.hall ? machineMap[prev.hall] || [] : [];
 
-        return syncDerivedValues({
-          ...prev,
-          date: prev.isEditMode ? prev.date : getTodayDate(),
-          machine: selectedMachine?.code || value || "",
-          machineCode: selectedMachine?.code || value || "",
-          machineName: selectedMachine?.name || "",
-          machineDisplayName: selectedMachine?.displayName || "",
-        });
-      });
-      return;
-    }
+    const selectedMachine =
+      hallMachines.find((item) => item.code === value) || null;
 
+    return syncDerivedValues({
+      ...prev,
+
+      machine: selectedMachine?.code || value || "",
+      machineCode: selectedMachine?.code || value || "",
+      machineName: selectedMachine?.name || "",
+      machineDisplayName: selectedMachine?.displayName || "",
+
+      // reset part
+      part: "",
+      partNumber: "",
+      partCategory: "",
+      standardCycleTime: "",
+      actualCycleTime: "",
+    });
+  });
+
+  return;
+}
     if (name === "duration") {
       setForm((prev) =>
         syncDerivedValues({
@@ -1089,7 +1216,7 @@ const handlePartChange = (e) => {
 
   const handleLossTimeRowChange = (rowId, field, value) =>
     setForm((prev) => {
-      const cycleTime = Number(prev.cycleTime || 0);
+      const actualCycleTime = Number(prev.standardCycleTime || 0);
       const currentRows = Array.isArray(prev.lossTimeBreakdown)
         ? prev.lossTimeBreakdown
         : [createLossTimeRow()];
@@ -1106,17 +1233,21 @@ const handlePartChange = (e) => {
           };
         }
 
-        if (field === "qty") {
-          const cleanValue = value ? Math.max(0, Number(value)) : "";
-          return {
-            ...item,
-            qty: cleanValue !== "" ? String(cleanValue) : "",
-            minutes:
-              cleanValue !== ""
-                ? calculateMinutesFromQty(cleanValue, cycleTime)
-                : "",
-          };
-        }
+       if (field === "qty") {
+  const cleanValue = value ? Math.max(0, Number(value)) : "";
+
+  return {
+    ...item,
+    qty: cleanValue !== "" ? String(cleanValue) : "",
+    minutes:
+      cleanValue !== ""
+        ? calculateMinutesFromQty(
+            cleanValue,
+            Number(prev.standardCycleTime || 0)
+          )
+        : "",
+  };
+}
 
         return {
           ...item,
@@ -1202,34 +1333,89 @@ const handlePartChange = (e) => {
 
     setSubmitError("");
     setSubmitSuccess("");
+      // ===== FORM VALIDATION =====
+  const errors = getFormValidationErrors(form);
 
-    const payload = {
-      date: (form.date || "").trim(),
-      hall: (form.hall || "").trim(),
-      machineCode: (form.machineCode || form.machine || "").trim(),
-      machineName: (form.machineName || "").trim(),
-      machineDisplayName: (form.machineDisplayName || "").trim(),
-      shift: (form.shift || "").trim(),
-      duration: (form.duration || "").trim(),
-      operatorId: (form.operatorId || "").trim(),
-      operator: (form.operator || "").trim(),
-      part: (form.part || "").trim(),
-      target: Number(form.target || 0),
-      actual: Number(form.actual || 0),
-      good: Number(form.good || 0),
-      reject: Number(form.reject || 0),
-      lossMinutes: Number(form.lossTimeMinutes || 0),
-      rejectReason: (form.rejectReason || "").trim(),
-      remarks: (form.remarks || "").trim(),
-      rejectBreakdown: sanitizeRejectBreakdown(
-        form.rejectBreakdown,
-        Number(form.reject || 0)
-      ),
-      lossTimeBreakdown: sanitizeLossTimeBreakdown(
-        form.lossTimeBreakdown,
-        form.cycleTime
-      ),
-    };
+  if (Object.keys(errors).length > 0) {
+    const firstError = Object.values(errors)[0];
+
+    setSubmitError(firstError);
+    showToast("error", "Validation Error", firstError);
+
+    return;
+  }
+
+  // ===== LOSS TIME CHECK =====
+  const lossQty = Number(form.lossTime || 0);
+
+  if (lossQty > 0) {
+    const validLossRows = form.lossTimeBreakdown.filter((row) => {
+      const matchedPerson = getResponsibilityMatch(row.person);
+
+      return (
+        row.reason &&
+        Number(row.qty || 0) > 0 &&
+        row.person &&
+        matchedPerson
+      );
+    });
+
+    if (validLossRows.length === 0) {
+      const msg =
+        "Loss Quantity available. Please fill Loss Time Breakdown.";
+
+      setSubmitError(msg);
+      showToast("error", "Validation Error", msg);
+
+      return;
+    }
+  }
+
+ const payload = {
+  date: (form.date || "").trim(),
+  hall: (form.hall || "").trim(),
+
+  machineCode: (form.machineCode || form.machine || "").trim(),
+  machineName: (form.machineName || "").trim(),
+  machineDisplayName: (form.machineDisplayName || "").trim(),
+
+  shift: (form.shift || "").trim(),
+  duration: (form.duration || "").trim(),
+
+  operatorId: (form.operatorId || "").trim(),
+  operator: (form.operator || "").trim(),
+
+  part: (form.part || "").trim(),
+
+  // NEW FIELDS
+  partNumber: (form.partNumber || "").trim(),
+  partCategory: (form.partCategory || "").trim(),
+
+  standardCycleTime: Number(form.standardCycleTime || 0),
+  actualCycleTime: Number(form.actualCycleTime || 0),
+
+  target: Number(form.target || 0),
+  actual: Number(form.actual || 0),
+  good: Number(form.good || 0),
+  reject: Number(form.reject || 0),
+
+  lossMinutes: Number(form.lossTimeMinutes || 0),
+
+  rejectReason: (form.rejectReason || "").trim(),
+  remarks: (form.remarks || "").trim(),
+
+  rejectBreakdown: sanitizeRejectBreakdown(
+    form.rejectBreakdown,
+    Number(form.reject || 0)
+  ),
+
+  lossTimeBreakdown: sanitizeLossTimeBreakdown(
+    form.lossTimeBreakdown,
+
+    // Loss minutes standard cycle time se
+    form.standardCycleTime
+  ),
+};
 
     if (
       !payload.date ||
@@ -1250,8 +1436,8 @@ const handlePartChange = (e) => {
       return;
     }
 
-    if (!isPositiveNumber(form.cycleTime)) {
-      const msg = "Cycle time must be greater than zero.";
+if (!isPositiveNumber(form.actualCycleTime)) {
+   const msg = "Actual cycle time must be greater than zero.";
       setSubmitError(msg);
       showToast("error", "Validation Error", msg);
       return;
@@ -1260,7 +1446,7 @@ const handlePartChange = (e) => {
     try {
       setIsSubmitting(true);
 
-      const response = await fetch("https://kushalyouth.com/api/entries.php", {
+      const response = await fetch("https://kushalyouth.com/api/entriesv2.php", {
         method: "POST",
         headers: {
           Accept: "application/json",
@@ -1421,7 +1607,12 @@ const handlePartChange = (e) => {
                   name="date"
                   value={form.date}
                   className={getFieldClassName(false, true)}
-                
+                 onChange={(e) =>
+      setForm({
+        ...form,
+        date: e.target.value,
+      })
+    }
                   required
                 />
               </Field>
@@ -1512,9 +1703,9 @@ const handlePartChange = (e) => {
           setForm((prev) =>
             syncDerivedValues({
               ...prev,
-              date: prev.isEditMode ? prev.date : getTodayDate(),
               part: "",
               cycleTime: "",
+              standardCycleTime: "",
               partMode: "select",
             })
           )
@@ -1524,46 +1715,106 @@ const handlePartChange = (e) => {
       </button>
     </div>
   ) : (
-    <select
-      name="partSelector"
-      value={form.partMode === "manual" ? "manual" : form.part}
-      onChange={handlePartChange}
-      className="field"
-      required
-    >
-      <option value="">Select Part</option>
+    <>
+      <input
+        list="parts-list"
+        disabled={!form.machineCode}
+        value={form.part}
+        onChange={(e) => {
+          const value = e.target.value;
 
-      {partCycleTimeData
-        .filter((item) => item.partName !== "Other")
-        .map((item) => (
-          <option key={item.partName} value={item.partName}>
-            {item.partName}
-          </option>
-        ))}
+          if (value === "__OTHER__") {
+            setForm((prev) =>
+              syncDerivedValues({
+                ...prev,
+                part: "",
+                cycleTime: "",
+                standardCycleTime: "",
+                partMode: "manual",
+              })
+            );
+            return;
+          }
 
-      <option value="manual">Other</option>
-    </select>
+          const selectedPart = partsMap[value];
+
+        setForm((prev) =>
+  syncDerivedValues({
+    ...prev,
+    part: value,
+
+    partNumber: selectedPart?.partNumber || "",
+    partCategory: selectedPart?.category || "",
+
+    standardCycleTime: selectedPart?.cycleTime || "",
+    actualCycleTime: selectedPart?.cycleTime || "",
+
+    partMode: "select",
+  })
+);
+        }}
+        className="field"
+        placeholder="Search Part Name"
+        required
+      />
+<datalist id="parts-list">
+  {filteredPartsData.map((part) => (
+    <option
+      key={part.part_number}
+      value={part.part_name}
+    />
+  ))}
+
+  <option value="__OTHER__">Other</option>
+</datalist>
+    </>
   )}
+
+</Field>
+<Field label="Part Number">
+  <input
+    type="text"
+    value={form.partNumber}
+    className={getFieldClassName(false, true)}
+    readOnly
+  />
 </Field>
 
-              <Field
-                label="Cycle Time (sec)"
-                error={validationErrors.cycleTime}
-              >
-                <input
-                  type="number"
-                  name="cycleTime"
-                  value={form.cycleTime}
-                  onChange={handleChange}
-                  className={getFieldClassName(
-                    validationErrors.cycleTime,
-                    form.partMode !== "manual"
-                  )}
-                  inputMode="numeric"
-                  readOnly={form.partMode !== "manual"}
-                  required
-                />
-              </Field>
+<Field label="Part Category">
+  <input
+    type="text"
+    value={form.partCategory}
+    className={getFieldClassName(false, true)}
+    readOnly
+  />
+</Field>
+             <Field label="Standard Cycle Time (sec)">
+  <input
+    type="number"
+    value={form.standardCycleTime}
+    className={getFieldClassName(false, true)}
+    readOnly
+  />
+</Field>
+
+<Field
+  label="Actual Cycle Time (sec)"
+  error={validationErrors.cycleTime}
+>
+  <input
+    type="number"
+    name="actualCycleTime"
+    value={form.actualCycleTime}
+    onChange={handleChange}
+    className={getFieldClassName(
+      validationErrors.cycleTime,
+      false
+    )}
+    inputMode="numeric"
+    min="1"
+    required
+  />
+</Field>
             </div>
           </section>
 

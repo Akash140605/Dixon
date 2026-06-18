@@ -90,13 +90,21 @@ const normalizeShift = (value) => {
   const shift = String(value || "").trim().toUpperCase();
 
   if (!shift) return "";
-  if (["A", "SHIFT A", "SHIFT 1", "1"].includes(shift)) return "A";
-  if (["B", "SHIFT B", "SHIFT 2", "2"].includes(shift)) return "B";
-  if (["C", "SHIFT C", "SHIFT 3", "3"].includes(shift)) return "C";
 
-  return shift.replace("SHIFT ", "");
+  if (
+    ["A", "SHIFT A", "SHIFT 1", "1"].includes(shift)
+  ) {
+    return "Shift A";
+  }
+
+  if (
+    ["B", "SHIFT B", "SHIFT 2", "2"].includes(shift)
+  ) {
+    return "Shift B";
+  }
+
+  return shift;
 };
-
 const normalizeDate = (value) => {
   if (!value) return "";
 
@@ -412,17 +420,24 @@ export default function HourlyProductionTable({ rows = [] }) {
     });
   }, [rows]);
 
-  const uniqueOptions = useMemo(() => {
-    const pick = (getter) => [...new Set(normalizedRows.map(getter).filter(Boolean))].sort();
+ const uniqueOptions = useMemo(() => {
+  const pick = (getter) =>
+    [...new Set(normalizedRows.map(getter).filter(Boolean))].sort();
 
-    return {
-      halls: pick((row) => row.hall),
-      machines: pick((row) => row.machineDisplay),
-      shifts: ["A", "B", "C"].filter((shift) =>
-        normalizedRows.some((row) => row.normalizedShift === shift)
-      ),
-    };
-  }, [normalizedRows]);
+  return {
+    halls: pick((row) => row.hall),
+
+    machines: pick((row) => row.machineDisplay),
+
+    shifts: ["Shift A", "Shift B"].filter((shift) =>
+      normalizedRows.some((row) => row.normalizedShift === shift)
+    ),
+
+    partNumbers: pick((row) => row.partNumber),
+
+    categories: pick((row) => row.partCategory),
+  };
+}, [normalizedRows]);
 
   const filteredRows = useMemo(() => {
     const searchText = filters.search.trim().toLowerCase();
@@ -441,6 +456,10 @@ export default function HourlyProductionTable({ rows = [] }) {
       const shift = String(row.normalizedShift || "").toLowerCase();
       const hour = String(row.hour || row.duration || "").toLowerCase();
       const part = String(row.part || "").toLowerCase();
+      const partNumber = String(row.partNumber || "").toLowerCase();
+const partCategory = String(row.partCategory || "").toLowerCase();
+const standardCycleTime = String(row.standardCycleTime || "").toLowerCase();
+const actualCycleTime = String(row.actualCycleTime || "").toLowerCase();
       const operatorId = String(row.operatorId || "").toLowerCase();
       const operator = String(row.operator || "").toLowerCase();
       const rejectReason = String(row.rejectReason || "").toLowerCase();
@@ -462,7 +481,11 @@ export default function HourlyProductionTable({ rows = [] }) {
           machineName,
           shift,
           hour,
-          part,
+           part,
+  partNumber,
+  partCategory,
+  standardCycleTime,
+  actualCycleTime,
           operatorId,
           operator,
           rejectReason,
@@ -478,7 +501,9 @@ export default function HourlyProductionTable({ rows = [] }) {
       const matchesDate = !filterDate || date.includes(filterDate);
       const matchesHall = !filters.hall || hall === filters.hall.toLowerCase();
       const matchesMachine = !filters.machine || machine === filters.machine.toLowerCase();
-      const matchesShift = !filters.shift || shift === filters.shift.toLowerCase();
+    const matchesShift =
+  !filters.shift ||
+  row.normalizedShift === filters.shift;
 
       const matchesRejectReason =
         !filterRejectReason ||
@@ -555,6 +580,10 @@ export default function HourlyProductionTable({ rows = [] }) {
         Shift: row.normalizedShift || "",
         Hour: row.hour || row.duration || "",
         Part: row.part || "",
+        "Part Number": row.partNumber || "",
+"Part Category": row.partCategory || "",
+"Std Cycle Time": row.standardCycleTime || 0,
+"Actual Cycle Time": row.actualCycleTime || 0,
         "Operator ID": row.operatorId || "",
         Operator: row.operator || "",
         "New Operator": row.isNewOperator ? "Yes" : "No",
@@ -885,6 +914,10 @@ export default function HourlyProductionTable({ rows = [] }) {
                 <TableHead className="w-[80px]">Shift</TableHead>
                 <TableHead className="w-[150px]">Hour</TableHead>
                 <TableHead className="w-[220px]">Part</TableHead>
+                <TableHead className="w-[180px]">Part Number</TableHead>
+<TableHead className="w-[150px]">Category</TableHead>
+<TableHead className="w-[130px]">Std CT</TableHead>
+<TableHead className="w-[130px]">Actual CT</TableHead>
                 <TableHead className="w-[130px]">Operator ID</TableHead>
                 <TableHead className="w-[190px]">Operator</TableHead>
                 <TableHead className="w-[130px]">New Operator</TableHead>
@@ -934,6 +967,16 @@ export default function HourlyProductionTable({ rows = [] }) {
                       </TableCell>
                       <TableCell clamp>{row.hour || row.duration || "-"}</TableCell>
                       <TableCell clamp>{row.part || "-"}</TableCell>
+                      <TableCell>{row.partNumber || "-"}</TableCell>
+<TableCell>{row.partCategory || "-"}</TableCell>
+
+<TableCell className="font-semibold">
+  {row.standardCycleTime || "-"}
+</TableCell>
+
+<TableCell className="font-semibold">
+  {row.actualCycleTime || "-"}
+</TableCell>
                       <TableCell>{row.operatorId || "-"}</TableCell>
                       <TableCell clamp>{row.operator || "-"}</TableCell>
                       <TableCell>
@@ -1000,7 +1043,7 @@ export default function HourlyProductionTable({ rows = [] }) {
               <tfoot className="bg-slate-100">
                 <tr className="border-t-2 border-slate-400 text-slate-900">
                   <td
-                    colSpan="11"
+                    colSpan="15"
                     className="px-4 py-3 text-right font-bold uppercase tracking-wide"
                   >
                     Total

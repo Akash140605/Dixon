@@ -1,0 +1,5 @@
+ALTER TABLE production_entries
+ADD COLUMN partNumber VARCHAR(100) NULL,
+ADD COLUMN partCategory VARCHAR(100) NULL,
+ADD COLUMN standardCycleTime DECIMAL(10,2) DEFAULT 0,
+ADD COLUMN actualCycleTime DECIMAL(10,2) DEFAULT 0;

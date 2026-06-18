@@ -72,16 +72,16 @@ async function apiRequest(endpoint, { method = "GET", payload, signal } = {}) {
 }
 
 export const fetchEntriesApi = (signal) =>
-  apiRequest("/entries.php", { method: "GET", signal });
+  apiRequest("/entriesv2.php", { method: "GET", signal });
 
 export const createEntryApi = (payload, signal) =>
-  apiRequest("/entries.php", { method: "POST", payload, signal });
+  apiRequest("/entriesv2.php", { method: "POST", payload, signal });
 
 export const updateEntryApi = (payload, signal) =>
-  apiRequest("/entries.php", { method: "PUT", payload, signal });
+  apiRequest("/entriesv2.php", { method: "PUT", payload, signal });
 
 export const deleteEntryApi = (id, signal) =>
-  apiRequest(`/entries.php?id=${encodeURIComponent(id)}`, {
+  apiRequest(`/entriesv2.php?id=${encodeURIComponent(id)}`, {
     method: "DELETE",
     signal,
   });
