@@ -660,7 +660,7 @@ export default function ProductionEntryForm() {
     loss: useRef(null),
     remarks: useRef(null),
   };
-
+const [partsLoading, setPartsLoading] = useState(true);
   const [partsData, setPartsData] = useState([]);
 const [partsMap, setPartsMap] = useState({});
 useEffect(() => {
@@ -688,13 +688,25 @@ useEffect(() => {
 
         setPartsMap(map);
       }
+      setPartsLoading(false);
     } catch (err) {
       console.error("Part API Error", err);
+        setPartsLoading(false);
     }
   };
 
   loadParts();
 }, []);
+
+useEffect(() => {
+  if (!Object.keys(partsMap).length) return;
+
+  setForm((prev) =>
+    syncDerivedValues({
+      ...prev,
+    })
+  );
+}, [partsMap]);
   const [activeTab, setActiveTab] = useState("production");
   const [toast, setToast] = useState({
     show: false,
@@ -825,10 +837,12 @@ const syncDerivedValues = (draft) => {
       ? String(Number(draft.reject || 0))
       : String(getRejectBreakdownTotal(normalizedRejectBreakdown))
     : String(getRejectBreakdownTotal(normalizedRejectBreakdown));
-
 const knownPart = !!partsMap[draft.part];
+
 const safePartMode =
-  draft.partMode || (knownPart ? "select" : "manual");
+  draft.partMode === "manual" || draft.partMode === "select"
+    ? draft.partMode
+    : "select";
 
 const actualCycleTime =
   String(draft.actualCycleTime ?? "");
@@ -837,6 +851,12 @@ const standardCycleTime =
   knownPart
     ? String(partsMap[draft.part]?.cycleTime || "")
     : String(draft.standardCycleTime ?? "");
+
+// API load hone ke baad known part ko auto select mode me lao
+const finalPartMode =
+  knownPart && draft.part
+    ? "select"
+    : safePartMode;
 
 const target =
   standardCycleTime
@@ -879,7 +899,7 @@ const resolvedPartCategory =
   partCategory: resolvedPartCategory,
   date: draft.isEditMode ? draft.date || getTodayDate() : getTodayDate(),
 
-  partMode: safePartMode,
+partMode: finalPartMode,
 
   standardCycleTime,
   actualCycleTime,
@@ -1165,7 +1185,16 @@ setForm((prev) =>
       );
       return;
     }
+if (name === "actualCycleTime") {
+  setForm((prev) =>
+    syncDerivedValues({
+      ...prev,
+      actualCycleTime: value,
+    })
+  );
 
+  return;
+}
     if (name === "cycleTime") {
       setForm((prev) =>
         syncDerivedValues({
@@ -1555,7 +1584,15 @@ setForm((prev) => {
       setIsSubmitting(false);
     }
   }
-
+if (partsLoading) {
+  return (
+    <div className="page-shell">
+      <div className="page-container">
+        Loading parts...
+      </div>
+    </div>
+  );
+}
   return (
     <div className="page-shell">
       <link
