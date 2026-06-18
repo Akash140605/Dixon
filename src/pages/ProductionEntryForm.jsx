@@ -826,15 +826,9 @@ const syncDerivedValues = (draft) => {
       : String(getRejectBreakdownTotal(normalizedRejectBreakdown))
     : String(getRejectBreakdownTotal(normalizedRejectBreakdown));
 
-  const knownPart =
-    draft.part && Object.prototype.hasOwnProperty.call(partsMap, draft.part);
-
-  const safePartMode =
-    draft.partMode === "manual" || draft.partMode === "select"
-      ? draft.partMode
-      : knownPart
-        ? "select"
-        : "manual";
+const knownPart = !!partsMap[draft.part];
+const safePartMode =
+  draft.partMode || (knownPart ? "select" : "manual");
 
 const actualCycleTime =
   String(draft.actualCycleTime ?? "");
@@ -1084,14 +1078,22 @@ const selectedPart = partsMap[value];
 setForm((prev) =>
   syncDerivedValues({
     ...prev,
+
     date: prev.isEditMode ? prev.date : getTodayDate(),
+
     partMode: "select",
     part: value,
-  partNumber: selectedPart?.partNumber || "",
-partCategory: selectedPart?.category || "",
 
-standardCycleTime: selectedPart?.cycleTime || "",
-actualCycleTime: selectedPart?.cycleTime || "",
+    partNumber: selectedPart?.partNumber || "",
+    partCategory: selectedPart?.category || "",
+
+    standardCycleTime: selectedPart?.cycleTime || "",
+    actualCycleTime: selectedPart?.cycleTime || "",
+
+    target: "",
+    lossTime: "",
+    lossTimeMinutes: "",
+    lossTimeBreakdown: [createLossTimeRow()],
   })
 );
 };
@@ -1492,12 +1494,13 @@ if (!isPositiveNumber(form.actualCycleTime)) {
         "Production entry saved successfully."
       );
 
-      const nextSlot = getNextDurationSlot(form.duration);
+ const nextSlot = getNextDurationSlot(form.duration);
 
-setForm((prev) =>
-  syncDerivedValues({
+setForm((prev) => {
+  const nextForm = {
     ...getInitialFormState(),
 
+    // KEEP DATE/HALL/MACHINE
     date: prev.date,
     hall: prev.hall,
 
@@ -1506,10 +1509,15 @@ setForm((prev) =>
     machineName: prev.machineName,
     machineDisplayName: prev.machineDisplayName,
 
+    // KEEP OPERATOR
     operatorId: prev.operatorId,
     operator: prev.operator,
+    isNewOperator: prev.isNewOperator,
 
+    // KEEP PART
+    partMode: prev.partMode,
     part: prev.part,
+
     partNumber: prev.partNumber,
     partCategory: prev.partCategory,
 
@@ -1517,12 +1525,28 @@ setForm((prev) =>
     actualCycleTime: prev.actualCycleTime,
 
     cycleTime: prev.cycleTime,
-    partMode: prev.partMode,
 
+    // NEXT HOUR
     duration: nextSlot,
     shift: getShiftByDuration(nextSlot),
-  })
-);
+
+    // RESET PRODUCTION VALUES
+    actual: "",
+    target: "",
+    good: "",
+    reject: "",
+    lossTime: "",
+    lossTimeMinutes: "",
+
+    rejectBreakdown: createRejectBreakdown(),
+    lossTimeBreakdown: [createLossTimeRow()],
+
+    remarks: "",
+    rejectReason: "",
+  };
+
+  return syncDerivedValues(nextForm);
+});
     } catch (error) {
       const msg = error?.message || "Something went wrong while saving.";
       setSubmitError(msg);
