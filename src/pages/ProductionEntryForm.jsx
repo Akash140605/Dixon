@@ -844,35 +844,45 @@ const standardCycleTime =
     ? String(partsMap[draft.part]?.cycleTime || "")
     : String(draft.standardCycleTime ?? "");
 
- const target =
-  draft.standardCycleTime
-    ? calculateTargetFromCycleTime(draft.standardCycleTime)
+const target =
+  standardCycleTime
+    ? calculateTargetFromCycleTime(standardCycleTime)
     : "";
   const good = calculateGood(draft.actual, reject);
   const lossTime = calculateLossQuantity(target, draft.actual);
 const lossTimeMinutes =
   calculateLossTimeMinutes(
     lossTime,
-    draft.standardCycleTime
+    standardCycleTime
   );
   const safeLossRows = Array.isArray(draft.lossTimeBreakdown)
     ? draft.lossTimeBreakdown
     : [createLossTimeRow()];
+const resolvedPartNumber =
+  knownPart
+    ? partsMap[draft.part]?.partNumber || ""
+    : draft.partNumber || "";
 
+const resolvedPartCategory =
+  knownPart
+    ? partsMap[draft.part]?.category || ""
+    : draft.partCategory || "";
  const normalizedLossRows =
   Number(lossTime) > 0
     ? normalizeLossBreakdown(
         safeLossRows.map((item) => ({
           ...item,
-          minutes: calculateMinutesFromQty(
-            item.qty,
-            Number(draft.standardCycleTime || 0)
-          ),
+        minutes: calculateMinutesFromQty(
+  item.qty,
+  Number(standardCycleTime || 0)
+),
         }))
       )
     : [createLossTimeRow()];
   return {
   ...draft,
+  partNumber: resolvedPartNumber,
+  partCategory: resolvedPartCategory,
   date: draft.isEditMode ? draft.date || getTodayDate() : getTodayDate(),
 
   partMode: safePartMode,
@@ -1164,7 +1174,16 @@ actualCycleTime: selectedPart?.cycleTime || "",
       );
       return;
     }
+if (name === "standardCycleTime") {
+  setForm((prev) =>
+    syncDerivedValues({
+      ...prev,
+      standardCycleTime: value,
+    })
+  );
 
+  return;
+}
     if (name === "operatorId") {
       const cleanValue = value.toUpperCase().trim();
       const matchedOperator = operatorMaster.find(
@@ -1475,22 +1494,35 @@ if (!isPositiveNumber(form.actualCycleTime)) {
 
       const nextSlot = getNextDurationSlot(form.duration);
 
-      setForm((prev) =>
-        syncDerivedValues({
-          ...getInitialFormState(),
-          date: prev.date,
-          hall: prev.hall,
-          machine: prev.machine,
-          machineCode: prev.machineCode,
-          machineName: prev.machineName,
-          machineDisplayName: prev.machineDisplayName,
-          part: prev.partMode === "manual" ? "" : prev.part,
-          partMode: prev.partMode,
-          cycleTime: prev.partMode === "manual" ? "" : prev.cycleTime,
-          duration: nextSlot,
-          shift: getShiftByDuration(nextSlot),
-        })
-      );
+setForm((prev) =>
+  syncDerivedValues({
+    ...getInitialFormState(),
+
+    date: prev.date,
+    hall: prev.hall,
+
+    machine: prev.machine,
+    machineCode: prev.machineCode,
+    machineName: prev.machineName,
+    machineDisplayName: prev.machineDisplayName,
+
+    operatorId: prev.operatorId,
+    operator: prev.operator,
+
+    part: prev.part,
+    partNumber: prev.partNumber,
+    partCategory: prev.partCategory,
+
+    standardCycleTime: prev.standardCycleTime,
+    actualCycleTime: prev.actualCycleTime,
+
+    cycleTime: prev.cycleTime,
+    partMode: prev.partMode,
+
+    duration: nextSlot,
+    shift: getShiftByDuration(nextSlot),
+  })
+);
     } catch (error) {
       const msg = error?.message || "Something went wrong while saving.";
       setSubmitError(msg);
@@ -1685,7 +1717,8 @@ if (!isPositiveNumber(form.actualCycleTime)) {
               </Field>
 <Field label="Part Name">
   {form.partMode === "manual" ? (
-    <div className="manual-part-wrap">
+  <div className="manual-part-wrap">
+    <Field >
       <input
         type="text"
         name="part"
@@ -1695,26 +1728,67 @@ if (!isPositiveNumber(form.actualCycleTime)) {
         placeholder="Enter part name"
         required
       />
+    </Field>
 
-      <button
-        type="button"
-        className="outline-btn"
-        onClick={() =>
-          setForm((prev) =>
-            syncDerivedValues({
-              ...prev,
-              part: "",
-              cycleTime: "",
-              standardCycleTime: "",
-              partMode: "select",
-            })
-          )
-        }
-      >
-        Back to Parts
-      </button>
-    </div>
-  ) : (
+    <Field label="Part Number">
+      <input
+        type="text"
+        name="partNumber"
+        value={form.partNumber}
+        onChange={handleChange}
+        className="field"
+        placeholder="Enter Part Number"
+        required
+      />
+    </Field>
+
+    <Field label="Part Category">
+      <input
+        type="text"
+        name="partCategory"
+        value={form.partCategory}
+        onChange={handleChange}
+        className="field"
+        placeholder="Enter Category"
+        required
+      />
+    </Field>
+
+    <Field label="Standard Cycle Time (Sec)">
+      <input
+        type="number"
+        name="standardCycleTime"
+        value={form.standardCycleTime}
+        onChange={handleChange}
+        className="field"
+        placeholder="Enter Standard Cycle Time"
+        min="1"
+        required
+      />
+    </Field>
+
+    <button
+      type="button"
+      className="outline-btn"
+      onClick={() =>
+        setForm((prev) =>
+          syncDerivedValues({
+            ...prev,
+            part: "",
+            partNumber: "",
+            partCategory: "",
+            cycleTime: "",
+            standardCycleTime: "",
+            actualCycleTime: "",
+            partMode: "select",
+          })
+        )
+      }
+    >
+      Back to Parts
+    </button>
+  </div>
+) : (
     <>
       <input
         list="parts-list"
@@ -1723,18 +1797,31 @@ if (!isPositiveNumber(form.actualCycleTime)) {
         onChange={(e) => {
           const value = e.target.value;
 
-          if (value === "__OTHER__") {
-            setForm((prev) =>
-              syncDerivedValues({
-                ...prev,
-                part: "",
-                cycleTime: "",
-                standardCycleTime: "",
-                partMode: "manual",
-              })
-            );
-            return;
-          }
+      if (value === "__OTHER__") {
+  setForm((prev) =>
+    syncDerivedValues({
+      ...prev,
+
+      part: "",
+      partMode: "manual",
+
+      // identify unknown parts later
+       partNumber: "PENDING",
+      partCategory: "OTHER",
+
+      standardCycleTime: "",
+      actualCycleTime: "",
+
+      target: "",
+      lossTime: "",
+      lossTimeMinutes: "",
+
+      lossTimeBreakdown: [createLossTimeRow()],
+    })
+  );
+
+  return;
+}
 
           const selectedPart = partsMap[value];
 

@@ -254,8 +254,20 @@ function normalizeHourlyRow(row = {}) {
     machineDisplayName: row.machineDisplayName || getMachineDisplay(row),
     machineCode: row.machineCode || row.machine?.code || "",
     machineName: row.machineName || row.machine?.name || "",
-    part: row.part || "",
-    date: formatDisplayDate(row.date || ""),
+   part: row.part || "",
+
+partNumber: row.partNumber || "",
+partCategory: row.partCategory || "",
+
+standardCycleTime: Number(
+  row.standardCycleTime || row.cycleTime || 0
+),
+
+actualCycleTime: Number(
+  row.actualCycleTime || 0
+),
+
+date: formatDisplayDate(row.date || ""),
     createdAt: row.created_at || row.createdAt || "",
     updatedAt: row.updated_at || row.updatedAt || "",
   };
@@ -633,10 +645,22 @@ function createNormalizedEntryPayload(entry) {
     shiftLabel: normalizedShiftLabel,
     hour: entry.duration || entry.hour,
     duration: entry.duration || entry.hour,
-    part: entry.part,
-    actual,
-    good,
-    reject,
+   part: entry.part,
+
+partNumber: entry.partNumber || "",
+partCategory: entry.partCategory || "",
+
+standardCycleTime: Number(
+  entry.standardCycleTime || 0
+),
+
+actualCycleTime: Number(
+  entry.actualCycleTime || 0
+),
+
+actual,
+good,
+reject,
     target,
     lossTime,
     lossTimeMinutes,
