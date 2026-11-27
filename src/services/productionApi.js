@@ -1,4 +1,7 @@
-const API_BASE = "https://kushalyouth.com/api";
+// Dev (npm run dev) uses the local SQLite API; production build keeps the live server.
+const API_BASE =
+  import.meta.env.VITE_API_BASE ||
+  (import.meta.env.DEV ? "/api" : "https://kushalyouth.com/api");
 
 async function handleResponse(response) {
   console.log("[API] Response status:", response.status);
