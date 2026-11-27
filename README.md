@@ -27,4 +27,5 @@ Dummy data: 251 parts and about 7 days of hourly entries for 4 machines in every
 ### Using PHP instead (optional)
 `api/config.php` now points to the same SQLite file, so `php -S localhost:8000 -t api` also works
 (needs the `pdo_sqlite` extension). Run `npm run db:reset` once first to create the file.
+The production build (Vercel) still calls the live server `https://kushalyouth.com/api`; only `npm run dev` uses the local database.
 To call a different backend from the frontend, set `VITE_API_BASE` in a `.env` file, e.g. `VITE_API_BASE=http://localhost:8000`.

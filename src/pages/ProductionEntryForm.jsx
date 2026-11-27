@@ -6,7 +6,10 @@ import { operatorMaster as importedOperatorMaster } from "../data/operatorDetail
 
 import { useProduction } from "../context/ProductionContext";
 
-const API_BASE = import.meta.env.VITE_API_BASE || "/api";
+// Dev (npm run dev) uses the local SQLite API; production build keeps the live server.
+const API_BASE =
+  import.meta.env.VITE_API_BASE ||
+  (import.meta.env.DEV ? "/api" : "https://kushalyouth.com/api");
 
 const STORAGE_KEYS = {
   FORM_DRAFT: "production-entry-form-draft",
