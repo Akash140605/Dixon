@@ -1,4 +1,4 @@
-const API_BASE = "https://kushalyouth.com/api";
+const API_BASE = import.meta.env.VITE_API_BASE || "/api";
 
 async function handleResponse(response) {
   console.log("[API] Response status:", response.status);

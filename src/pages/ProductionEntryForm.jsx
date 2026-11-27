@@ -6,6 +6,8 @@ import { operatorMaster as importedOperatorMaster } from "../data/operatorDetail
 
 import { useProduction } from "../context/ProductionContext";
 
+const API_BASE = import.meta.env.VITE_API_BASE || "/api";
+
 const STORAGE_KEYS = {
   FORM_DRAFT: "production-entry-form-draft",
   ENTRIES: "production-entries",
@@ -667,7 +669,7 @@ useEffect(() => {
   const loadParts = async () => {
     try {
       const res = await fetch(
-        "https://kushalyouth.com/api/get_parts.php"
+        `${API_BASE}/get_parts.php`
       );
 
       const result = await res.json();
@@ -1496,7 +1498,7 @@ if (!isPositiveNumber(form.actualCycleTime)) {
     try {
       setIsSubmitting(true);
 
-      const response = await fetch("https://kushalyouth.com/api/entriesv2.php", {
+      const response = await fetch(`${API_BASE}/entriesv2.php`, {
         method: "POST",
         headers: {
           Accept: "application/json",
